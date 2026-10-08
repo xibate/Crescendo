@@ -4,7 +4,7 @@ local _, ns = ...
 --from Blizzard's encounter timeline and share them with other addons. Phases follow their stages, and the '@ability'
 --lines in the timings follow the bars they show for the boss abilities.
 
---Ability lines of the current fight (see ParseAbilityAnchors), each with the ramp or spell name it belongs to as 'entry'
+--Ability lines of the current fight (see Core/PlanText.lua), each with the ramp or spell name it belongs to as 'entry'
 ns.abilityAnchors = {}
 --Reminders tied to a boss mod bar, by bar id: { anchors, landsAt, reminders, shown } with reminder times in GetTime() seconds
 local abilityTimings = {}
@@ -184,25 +184,17 @@ function ns:ShowDueAbilityReminders(now)
     end
 end
 
---Explanation and the abilities seen on a boss, for the Boss Abilities tab in the options
-function ns:GetAbilityHelpText(encounterId)
-    local text = "Instead of a time, a timings line can follow a boss ability that BigWigs or DBM shows a bar for. The ramp is timed so " ..
-        "its last step lands when the ability does.\n\n" ..
-        "|cffffd100@Spectral Coils|r  every cast\n" ..
-        "|cffffd100@Spectral Coils #2,4|r  only the 2nd and 4th cast, the number in brackets on the bar\n" ..
-        "|cffffd100@Spectral Coils #2 -3|r  3 seconds before the ability, +3 is 3 seconds after\n" ..
-        "|cffffd100@1299010 #2|r  a spell id works instead of the name\n\n" ..
-        "Steps that should start before the bar appears show as soon as it does, and the bar has to be enabled in your boss mod.\n\n" ..
-        "|cffffd100Abilities seen on this boss|r\n"
+--The abilities BigWigs or DBM showed bars for on a boss, for the Plan tab
+function ns:GetSeenAbilitiesText(encounterId)
     local names = {}
     for name, spellId in pairs(ns.db.seenAbilities[encounterId] or {}) do
         table.insert(names, type(spellId) == 'number' and (name .. ' (' .. spellId .. ')') or name)
     end
     if #names == 0 then
-        return text .. "None yet, pull this boss with BigWigs or DBM and the abilities they show bars for are listed here."
+        return "None yet. Pull this boss with BigWigs or DBM and the abilities they show bars for are listed here, to use in @ lines."
     end
     table.sort(names)
-    return text .. table.concat(names, '\n')
+    return table.concat(names, '\n')
 end
 
 local bossModHooks = CreateFrame("Frame")

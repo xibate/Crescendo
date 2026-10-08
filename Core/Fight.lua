@@ -1,14 +1,14 @@
 local _, ns = ...
 
---State of the current fight: running, specName, encounterId (nil in test mode), start time, and the phase key and
+--State of the current fight: running, specKey, encounterId (nil in test mode), start time, and the phase key and
 --start time of the current phase
 ns.fight = { running = false }
 
-function ns:StartFight(specName, encounterId)
+function ns:StartFight(specKey, encounterId)
     ns:StopFight()
     ns.fight = {
         running = true,
-        specName = specName,
+        specKey = specKey,
         encounterId = encounterId,
         start = GetTime()
     }
@@ -78,8 +78,9 @@ end
 function ns:TimeUntilFullCharges(spellId)
     local charges = C_Spell.GetSpellCharges(spellId)
     if not charges or ns:IsSecret(charges.currentCharges) or ns:IsSecret(charges.cooldownStartTime) or ns:IsSecret(charges.cooldownDuration) then
-        return 2 * ns:GetCooldown(ns.fight.specName, spellId)
+        return 2 * ns:GetRechargeTime(spellId)
     end
+    ns.rechargeTimes[spellId] = charges.cooldownDuration
     if charges.currentCharges >= 2 then
         return charges.cooldownDuration
     end

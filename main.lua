@@ -4,25 +4,24 @@ local _, ns = ...
 local function OnFightStart(event, encounterId, encounterName, difficultyId)
     local isRaidBoss = event == "ENCOUNTER_START" and ns.difficulties[difficultyId] ~= nil
     if isRaidBoss and not ns.bosses[encounterId] then
-        ns:WriteOutput('No timings for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Data.lua to use the addon on this boss')
+        ns:WriteOutput('No plan for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Bosses.lua to use the addon on this boss')
         return
     end
     local isTest = event == "PLAYER_REGEN_DISABLED" and ns.db.testing.testMode
     if not isRaidBoss and not isTest then
         return
     end
-    local specName = ns:GetPlayerSpecName()
-    if not specName then
+    local specKey = ns:GetPlayerSpecKey()
+    if not specKey then
         return
     end
-    ns:UpdateCooldowns(specName)
     if isTest then
-        ns:BuildFightPlan(specName, ns:GetTestTimings(specName), false)
+        ns:BuildFightPlan(specKey, ns:GetTestPlan(specKey), false)
     else
-        ns:BuildFightPlan(specName, ns:GetBossTimings(specName, ns.difficulties[difficultyId].slug, encounterId), true)
+        ns:BuildFightPlan(specKey, ns:GetPlan(specKey, ns.difficulties[difficultyId].slug, encounterId), true)
     end
     ns:ResetAbilityTimings()
-    ns:StartFight(specName, not isTest and encounterId or nil)
+    ns:StartFight(specKey, not isTest and encounterId or nil)
     ns:ReplayEarlyBossModEvents()
 end
 
@@ -42,10 +41,15 @@ fightEnd:SetScript("OnEvent", function(_, event)
     end
 end)
 
---Keeps the last readable haste value, since it can be secret during encounters
-local hasteTracker = CreateFrame("Frame")
-hasteTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
-hasteTracker:RegisterUnitEvent("UNIT_SPELL_HASTE", "player")
-hasteTracker:SetScript("OnEvent", function()
+--Haste and spell charges can be secret during encounters, so they are read while they can be
+local readableValues = CreateFrame("Frame")
+readableValues:RegisterEvent("PLAYER_ENTERING_WORLD")
+readableValues:RegisterEvent("PLAYER_REGEN_ENABLED")
+readableValues:RegisterUnitEvent("UNIT_SPELL_HASTE", "player")
+readableValues:SetScript("OnEvent", function()
     ns:GetPlayerHaste()
+    local specKey = ns:GetPlayerSpecKey()
+    if specKey and ns.db then
+        ns:UpdateRechargeTimes(specKey)
+    end
 end)

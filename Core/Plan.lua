@@ -1,11 +1,12 @@
 local _, ns = ...
 
 --Reminders of the current fight: ns.plan[phase key] lists the reminders timed from the pull ('main') or from the start of
---a phase, as { at = seconds, text, icon, ..., shown }. ns.steps has the steps of everything turned on, by ramp or spell name
+--a phase, as { at = seconds, text, icon, ..., shown }. ns.steps has the steps of every ramp or spell in the plan, by name,
+--and false for names that are neither
 ns.plan = {}
 ns.steps = {}
 
---In prerequisites only mode the final press of a ramp is left out
+--In setup steps only mode the final press of a ramp is left out
 function ns:ShouldUseStep(step)
     return not ns.db.options.preReqsOnly or step.prerequisite
 end
@@ -22,15 +23,15 @@ function ns:CreateReminder(step, at)
     }
 end
 
---Timings texts from the MRT notes the options say to read, by ramp or spell name, nil when no note is read
-local function ReadMrtNotes(specName)
+--Plan lines from the MRT notes the options say to read, nil when no note is read
+local function ReadMrtNotes(specKey)
     local options = ns.db.options
     if not options.readFromNote and not options.mrtPersonalNote then
         return nil
     end
     local note = _G.VMRT and _G.VMRT.Note
     if not note then
-        ns:WriteOutput("Reading timings from MRT notes is turned on, but MRT isn't loaded.")
+        ns:WriteOutput("Reading times from MRT notes is turned on, but MRT isn't loaded.")
         return nil
     end
     local texts = {}
@@ -40,63 +41,55 @@ local function ReadMrtNotes(specName)
     if options.mrtPersonalNote then
         table.insert(texts, note.SelfText or '')
     end
-    return ns:ParseNote(table.concat(texts, '\n'), specName)
+    return ns:NoteToPlan(table.concat(texts, '\n'), specKey)
 end
 
---Builds the reminders for a fight from the timings texts saved for the boss, or the times in the MRT notes when the
---options say so. The '@ability' lines always come from the saved timings, see BossMods.lua
-function ns:BuildFightPlan(specName, savedTimings, readNotes)
+--Builds the reminders of a fight from a plan. With MRT notes turned on, the times come from the notes and the boss
+--ability lines still come from the plan
+function ns:BuildFightPlan(specKey, planText, readNotes)
     ns.plan = {}
+    ns.steps = {}
     ns.abilityAnchors = {}
-    ns.steps = ns:GetSteps(specName)
-    local noteTimings = readNotes and ReadMrtNotes(specName)
-    for name, steps in pairs(ns.steps) do
-        for _, anchor in ipairs(ns:ParseAbilityAnchors(savedTimings[name])) do
-            anchor.entry = name
-            table.insert(ns.abilityAnchors, anchor)
+    local unknown = {}
+    local function StepsFor(entry)
+        if ns.steps[entry] == nil then
+            ns.steps[entry] = ns:GetEntrySteps(specKey, entry) or false
+            if not ns.steps[entry] then
+                table.insert(unknown, entry)
+            end
         end
-        local text = savedTimings[name]
-        if noteTimings then
-            text = noteTimings[name]
-        end
-        for phase, times in pairs(ns:ParseTimes(text)) do
-            ns.plan[phase] = ns.plan[phase] or {}
-            for _, seconds in ipairs(times) do
-                for _, step in ipairs(steps) do
-                    local at = math.floor(seconds - step.offset + 0.5)
-                    if at >= 0 and ns:ShouldUseStep(step) then
-                        table.insert(ns.plan[phase], ns:CreateReminder(step, at))
-                    end
-                end
+        return ns.steps[entry]
+    end
+
+    local plan = ns:ParsePlan(planText)
+    local noteText = readNotes and ReadMrtNotes(specKey)
+    local times = noteText and ns:ParsePlan(noteText).times or plan.times
+    for _, timing in ipairs(times) do
+        for _, step in ipairs(StepsFor(timing.entry) or {}) do
+            local at = math.floor(timing.seconds - step.offset + 0.5)
+            if at >= 0 and ns:ShouldUseStep(step) then
+                ns.plan[timing.phase] = ns.plan[timing.phase] or {}
+                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at))
             end
         end
     end
+    for _, anchor in ipairs(plan.abilities) do
+        if StepsFor(anchor.entry) then
+            table.insert(ns.abilityAnchors, anchor)
+        end
+    end
+    if #unknown > 0 then
+        ns:WriteOutput("Skipping what isn't a ramp or a spell you know: " .. table.concat(unknown, ', '))
+    end
 end
 
---Replaces the times saved for a boss with the player's lines of the note pasted in the import box. '@ability' lines are kept
-function ns:ImportNote(specName)
-    local import = ns.db.import
-    if not import.fight or not import.difficulty or not import.importText then
-        return
+--Replaces the times of a boss plan with the player's lines of an MRT note. Boss ability lines and comments are kept
+function ns:ImportNoteIntoPlan(specKey, diffSlug, encounterId, noteText)
+    local parts = {}
+    for _, text in ipairs({ ns:NoteToPlan(noteText, specKey), ns:KeepAbilityLines(ns:GetPlan(specKey, diffSlug, encounterId)) }) do
+        if text ~= '' then
+            table.insert(parts, text)
+        end
     end
-    local difficulty = ns.difficulties[import.difficulty]
-    local timings = ns:GetBossTimings(specName, difficulty.slug, import.fight)
-    local imported = ns:ParseNote(import.importText, specName)
-    for name, text in pairs(timings) do
-        timings[name] = ns:KeepAbilityLines(text)
-    end
-    for name, text in pairs(imported) do
-        timings[name] = (timings[name] or '') .. text
-    end
-    import.importText = ''
-    ns:WriteOutput('Imported ' .. specName .. ' timings for ' .. difficulty.name .. ' ' .. ns.bosses[import.fight].name)
-end
-
---Puts the times saved for the boss selected in the import box in the box as MRT note lines
-function ns:ExportNote(specName)
-    local import = ns.db.import
-    if import.fight and import.difficulty then
-        local timings = ns:GetBossTimings(specName, ns.difficulties[import.difficulty].slug, import.fight)
-        import.importText = ns:BuildNote(specName, timings)
-    end
+    ns:SetPlan(specKey, diffSlug, encounterId, table.concat(parts, '\n'))
 end

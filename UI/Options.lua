@@ -1,15 +1,286 @@
 local _, ns = ...
 
-local VERSION = "1.0.0"
+local VERSION = "2.0.0"
 
-local INVALID_TIMINGS = "Every line has to be a time, a phase time or a boss ability, like this:\n\n01:25\n00:50, p2\n@Spectral Coils #2\n\n" ..
-    "If your text has parts like {time:00:25} it is an MRT note, import it from the Import/Export tab instead."
+local PLAN_HELP = "One line per timing, naming one or more ramps or spells:\n\n" ..
+    "|cffffd10001:25 - Evangelism|r  1:25 after the pull\n" ..
+    "|cffffd10000:50 p2 - Ultimate Penitence|r  50 seconds after your boss mod shows stage 2 (intermissions are p1.5)\n" ..
+    "|cffffd100@Spectral Coils #2 -3 - Barrier|r  3 seconds before the 2nd Spectral Coils on your boss mod's bar\n" ..
+    "|cffffd10002:10 - Rewind, Time Dilation|r  several at once\n\n" ..
+    "Ramps come from the Ramps tab, any other spell gets a countdown and a reminder at its time. For ability lines, '#2,4' picks " ..
+    "casts by the number on the bar, '-3' or '+3' moves the timing, and a spell id works instead of the name. Without a boss mod, " ..
+    "start a phase with /zrh phase 2. Lines starting with -- are comments."
 
-local GROUPS = {
-    { key = 'ramps', tab = 'Ramps', testTab = 'Ramps', header = 'Ramps', toggleOrder = 2, desc = "the timings you will execute this ramp on" },
-    { key = 'cooldowns', tab = 'Cooldowns', testTab = 'Cooldowns', header = 'Cooldowns', toggleOrder = 11, desc = "the timings you will use this cooldown on" },
-    { key = 'utilities', tab = 'Utility', testTab = 'Utilities', header = 'Utility Spells', toggleOrder = 21, desc = "the timings you will use this spell on" }
-}
+local RAMP_HELP = "One step per line: |cffffd100when | text | options|r\n\n" ..
+    "|cffffd100when|r  seconds before the ramp lands (20), global cooldowns before it (12gcd), or 'charges <spell>' to show " ..
+    "the step once that spell's charges need all the time left to come back\n" ..
+    "|cffffd100options|r  setup (a setup step), countdown (counts down on the icon), icon <spell>, say <text to speak>\n\n" ..
+    "A step shows the icon of the spell in its text when there is one, otherwise the ramp's spell. The spell id is what MRT notes use for this ramp."
+
+local ABOUT = "Zynx Ramp Helper reminds healers of every step of their raid ramps. Write a plan per boss with when each ramp " ..
+    "or cooldown should land, and the addon shows and speaks the steps leading up to it.\n\n" ..
+    "Plan: the timings for each boss and difficulty, by time, by boss mod stage or by boss ability.\n" ..
+    "Ramps: the steps of each ramp of your spec, change them or add your own.\n" ..
+    "Display: size, position and voice of the reminders, and reading times from MRT notes.\n" ..
+    "Testing: a plan that runs when you start combat on a target dummy.\n\n" ..
+    "Version " .. VERSION
+
+local function UI()
+    return ns.db.ui
+end
+
+local function SelectedSpec()
+    local ui = UI()
+    if not ns.specNames[ui.spec or ''] then
+        ui.spec = ns:GetPlayerSpecKey() or 'Discipline'
+    end
+    return ui.spec
+end
+
+local function SelectedDifficulty()
+    local ui = UI()
+    if not ns.difficulties[ui.difficulty or 0] then
+        ui.difficulty = 16
+    end
+    return ui.difficulty, ns.difficulties[ui.difficulty].slug
+end
+
+local function SelectedBoss()
+    local ui = UI()
+    if not ns.bosses[ui.boss or 0] then
+        local first
+        for encounterId in pairs(ns.bosses) do
+            if not first or encounterId < first then
+                first = encounterId
+            end
+        end
+        ui.boss = first
+    end
+    return ui.boss
+end
+
+local function SelectedRamp()
+    local ui = UI()
+    local ramps = ns:GetRamps(SelectedSpec())
+    if not ramps[ui.ramp or ''] then
+        ui.ramp = ns:GetRampNames(SelectedSpec())[1]
+    end
+    return ui.ramp, ui.ramp and ramps[ui.ramp]
+end
+
+local function Names(source, field)
+    return function()
+        local values = {}
+        for id, entry in pairs(source) do
+            values[id] = field and entry[field] or entry
+        end
+        return values
+    end
+end
+
+local function SpecSelect(order)
+    return {
+        type = "select",
+        name = "Spec",
+        order = order,
+        values = Names(ns.specNames),
+        get = SelectedSpec,
+        set = function(_, specKey) UI().spec = specKey end
+    }
+end
+
+local function Header(name, order)
+    return { type = "header", name = name, order = order }
+end
+
+local function Text(text, order)
+    return { type = "description", name = text, order = order, fontSize = "medium" }
+end
+
+local function PlanTab()
+    return {
+        type = "group",
+        name = "Plan",
+        order = 1,
+        args = {
+            spec = SpecSelect(1),
+            difficulty = {
+                type = "select",
+                name = "Difficulty",
+                order = 2,
+                values = Names(ns.difficulties, 'name'),
+                get = function() return (SelectedDifficulty()) end,
+                set = function(_, diffId) UI().difficulty = diffId end
+            },
+            boss = {
+                type = "select",
+                name = "Boss",
+                order = 3,
+                values = Names(ns.bosses, 'name'),
+                get = SelectedBoss,
+                set = function(_, encounterId) UI().boss = encounterId end
+            },
+            plan = {
+                type = "input",
+                name = "Plan",
+                order = 4,
+                multiline = 16,
+                width = "full",
+                get = function()
+                    local _, diffSlug = SelectedDifficulty()
+                    return ns:GetPlan(SelectedSpec(), diffSlug, SelectedBoss())
+                end,
+                set = function(_, text)
+                    local _, diffSlug = SelectedDifficulty()
+                    ns:SetPlan(SelectedSpec(), diffSlug, SelectedBoss(), text)
+                end,
+                validate = function(_, text) return ns:CheckPlan(text) end
+            },
+            help = Text(PLAN_HELP, 5),
+            seenHeader = Header("Abilities seen on this boss", 10),
+            seen = Text(function() return ns:GetSeenAbilitiesText(SelectedBoss()) end, 11),
+            noteHeader = Header("MRT note", 20),
+            noteHelp = Text("Paste an MRT note to take your times from it, or copy this plan out as note lines. Boss ability lines stay in the plan.", 21),
+            note = {
+                type = "input",
+                name = "Note",
+                order = 22,
+                multiline = 8,
+                width = "full",
+                get = function() return UI().note end,
+                set = function(_, text) UI().note = text end
+            },
+            import = {
+                type = "execute",
+                name = "Use Times From Note",
+                order = 23,
+                width = 1.2,
+                confirm = true,
+                confirmText = "Replace the times in this plan with your lines from the note?",
+                func = function()
+                    local _, diffSlug = SelectedDifficulty()
+                    ns:ImportNoteIntoPlan(SelectedSpec(), diffSlug, SelectedBoss(), UI().note or '')
+                end
+            },
+            export = {
+                type = "execute",
+                name = "Copy Plan As Note",
+                order = 24,
+                width = 1.2,
+                func = function()
+                    local _, diffSlug = SelectedDifficulty()
+                    UI().note = ns:PlanToNote(ns:GetPlan(SelectedSpec(), diffSlug, SelectedBoss()), SelectedSpec())
+                end
+            }
+        }
+    }
+end
+
+local function RampsTab()
+    return {
+        type = "group",
+        name = "Ramps",
+        order = 2,
+        args = {
+            spec = SpecSelect(1),
+            ramp = {
+                type = "select",
+                name = "Ramp",
+                order = 2,
+                values = function()
+                    local values = {}
+                    for _, name in ipairs(ns:GetRampNames(SelectedSpec())) do
+                        values[name] = name
+                    end
+                    return values
+                end,
+                get = function() return (SelectedRamp()) end,
+                set = function(_, name) UI().ramp = name end
+            },
+            spellId = {
+                type = "input",
+                name = "Spell ID",
+                desc = "The spell MRT notes use for this ramp",
+                order = 3,
+                disabled = function() return not select(2, SelectedRamp()) end,
+                get = function()
+                    local _, ramp = SelectedRamp()
+                    return ramp and ramp.spellId and tostring(ramp.spellId) or ''
+                end,
+                set = function(_, text)
+                    local _, ramp = SelectedRamp()
+                    ramp.spellId = tonumber(text)
+                end,
+                validate = function(_, text)
+                    return (text == '' or tonumber(text) ~= nil) or "The spell id is a number"
+                end
+            },
+            steps = {
+                type = "input",
+                name = "Steps",
+                order = 4,
+                multiline = 10,
+                width = "full",
+                disabled = function() return not select(2, SelectedRamp()) end,
+                get = function()
+                    local _, ramp = SelectedRamp()
+                    return ramp and ramp.steps or ''
+                end,
+                set = function(_, text)
+                    local _, ramp = SelectedRamp()
+                    ramp.steps = text
+                end,
+                validate = function(_, text)
+                    local steps, problem = ns:ParseRampSteps(text)
+                    return steps ~= nil or problem
+                end
+            },
+            help = Text(RAMP_HELP, 5),
+            manageHeader = Header("Add or remove ramps", 10),
+            newName = {
+                type = "input",
+                name = "New ramp name",
+                order = 11,
+                get = function() return UI().newRamp end,
+                set = function(_, text) UI().newRamp = text end
+            },
+            add = {
+                type = "execute",
+                name = "Add Ramp",
+                order = 12,
+                func = function()
+                    local name = (UI().newRamp or ''):match('^%s*(.-)%s*$')
+                    if name ~= '' and not ns:FindRamp(SelectedSpec(), name) then
+                        ns:GetRamps(SelectedSpec())[name] = { steps = "3 | " .. name .. " soon | countdown\n0 | " .. name }
+                        UI().ramp = name
+                        UI().newRamp = nil
+                    end
+                end
+            },
+            delete = {
+                type = "execute",
+                name = "Delete Ramp",
+                order = 13,
+                confirm = true,
+                confirmText = "Delete this ramp?",
+                disabled = function() return not select(2, SelectedRamp()) end,
+                func = function()
+                    ns:GetRamps(SelectedSpec())[(SelectedRamp())] = nil
+                    UI().ramp = nil
+                end
+            },
+            restore = {
+                type = "execute",
+                name = "Restore Starter Ramps",
+                desc = "Adds the ramps the addon comes with for this spec back, replacing ramps with the same name",
+                order = 14,
+                confirm = true,
+                confirmText = "Put the starter ramps of this spec back? Changes to them are lost.",
+                func = function() ns:RestoreStarterRamps(SelectedSpec()) end
+            }
+        }
+    }
+end
 
 --An option in ns.db.options. Changing a display option redraws the displays
 local function Option(widget, key, redraw)
@@ -26,230 +297,11 @@ local function Option(widget, key, redraw)
     return widget
 end
 
---A timings box for one ramp or spell. 'timings' returns the table the text is saved in
-local function TimingsBox(name, timings, desc)
-    return {
-        type = "input",
-        multiline = 5,
-        name = name,
-        desc = desc,
-        width = "normal",
-        get = function()
-            return timings()[name]
-        end,
-        set = function(_, value)
-            timings()[name] = value
-        end,
-        validate = desc and function(_, value)
-            return ns:IsValidTimingsText(value) or INVALID_TIMINGS
-        end or nil
-    }
-end
-
-local function SortedNames(names)
-    table.sort(names)
-    return names
-end
-
---Names of the ramps, cooldowns and utilities of a spec, sorted, by group key
-local function SpecEntries(specName)
-    local data = ns.specData[specName]
-    local entries = { ramps = {}, cooldowns = {}, utilities = {} }
-    for name in pairs(ns:GetRampSteps(specName)) do
-        table.insert(entries.ramps, name)
-    end
-    for _, group in ipairs({ 'cooldowns', 'utilities' }) do
-        for _, name in pairs(data[group]) do
-            table.insert(entries[group], name)
-        end
-    end
-    for _, names in pairs(entries) do
-        SortedNames(names)
-    end
-    return entries
-end
-
---Description of the steps of each ramp of a spec
-local function RampStepsText(specName)
-    local lines = {}
-    local rampSteps = ns:GetRampSteps(specName)
-    for _, name in ipairs(SpecEntries(specName).ramps) do
-        table.insert(lines, '|cffffd100' .. name .. '|r')
-        for _, step in ipairs(rampSteps[name]) do
-            if step.chargesOf then
-                table.insert(lines, "- '" .. step.text .. "' on a dynamic time depending on charges")
-            else
-                table.insert(lines, "- '" .. step.text .. "' " .. step.offset .. " seconds before the timer")
-            end
-        end
-        table.insert(lines, '')
-    end
-    return table.concat(lines, '\n')
-end
-
-local function DropdownValues(source, field)
-    return function()
-        local values = {}
-        for id, entry in pairs(source) do
-            values[id] = entry[field]
-        end
-        return values
-    end
-end
-
---Timings boxes of every ramp, cooldown and utility of a spec for one boss and difficulty
-local function BossGroup(specName, entries, diffSlug, encounterId, boss)
-    local group = {
-        type = "group",
-        name = boss.name,
-        childGroups = "tab",
-        order = encounterId,
-        args = {
-            abilities = {
-                type = "group",
-                name = "Boss Abilities",
-                order = 4,
-                args = {
-                    desc = {
-                        type = "description",
-                        fontSize = "medium",
-                        name = function()
-                            return ns:GetAbilityHelpText(encounterId)
-                        end
-                    }
-                }
-            }
-        }
-    }
-    local function timings()
-        return ns:GetBossTimings(specName, diffSlug, encounterId)
-    end
-    for index, info in ipairs(GROUPS) do
-        local args = {}
-        for _, name in ipairs(entries[info.key]) do
-            args[name] = TimingsBox(name, timings, "Input " .. info.desc .. ", in the mm:ss format, each time in a new line")
-        end
-        group.args[info.key] = { type = "group", name = info.tab, order = index, args = args }
-    end
-    return group
-end
-
-local function ImportExportGroup(specName)
+local function DisplayTab()
     return {
         type = "group",
-        name = "Import/Export",
+        name = "Display",
         order = 3,
-        args = {
-            header = { type = "header", name = "MRT Note import and export", order = 0 },
-            fight = {
-                type = "select",
-                name = "Fight",
-                order = 1,
-                width = 1,
-                values = DropdownValues(ns.bosses, 'name'),
-                get = function() return ns.db.import.fight end,
-                set = function(_, fightId) ns.db.import.fight = fightId end
-            },
-            difficulty = {
-                type = "select",
-                name = "Difficulty",
-                order = 2,
-                width = 1,
-                values = DropdownValues(ns.difficulties, 'name'),
-                get = function() return ns.db.import.difficulty end,
-                set = function(_, diffId) ns.db.import.difficulty = diffId end
-            },
-            text = {
-                type = "input",
-                name = "Import Text",
-                order = 4,
-                multiline = 15,
-                width = "full",
-                get = function() return ns.db.import.importText end,
-                set = function(_, value) ns.db.import.importText = value end,
-                validate = function(_, value)
-                    if value:find(UnitName("player"), 1, true) then
-                        return true
-                    end
-                    return "The imported text doesn't contain the name of your current character, no timings would be imported. Make sure you are " ..
-                        "importing an MRT Note that has correctly formatted assignments that match your in-game name."
-                end
-            },
-            import = {
-                type = "execute",
-                name = "Import Timers",
-                order = 5,
-                width = 1,
-                func = function() ns:ImportNote(specName) end
-            },
-            export = {
-                type = "execute",
-                name = "Export Timers",
-                order = 6,
-                width = 1,
-                func = function() ns:ExportNote(specName) end
-            }
-        }
-    }
-end
-
---The timings, test timers and spell toggles of one spec
-local function SpecOptions(specName)
-    local entries = SpecEntries(specName)
-    local timings = {
-        type = "group",
-        name = specName,
-        childGroups = "tree",
-        args = {
-            fights = { type = "group", name = "Fights", order = 1, childGroups = "tree", args = {} },
-            ramps = {
-                type = "group",
-                name = "Ramp Types",
-                order = 2,
-                args = {
-                    desc = { type = "description", fontSize = "medium", name = RampStepsText(specName) }
-                }
-            },
-            importExport = ImportExportGroup(specName)
-        }
-    }
-    for diffId, difficulty in pairs(ns.difficulties) do
-        local bosses = {}
-        for encounterId, boss in pairs(ns.bosses) do
-            bosses[tostring(encounterId)] = BossGroup(specName, entries, difficulty.slug, encounterId, boss)
-        end
-        --Higher difficulty ids show up first, so mythic shows before heroic
-        timings.args.fights.args[difficulty.slug] = { type = "group", name = difficulty.name, order = 100 - diffId, childGroups = "select", args = bosses }
-    end
-
-    local tests = { type = "group", name = specName .. ' Test Timers', childGroups = 'tab', args = {} }
-    local toggles = { type = "group", name = specName, args = {} }
-    local function testTimings()
-        return ns:GetTestTimings(specName)
-    end
-    for index, info in ipairs(GROUPS) do
-        local testArgs = {}
-        toggles.args[info.key] = { type = "header", name = info.header, order = info.toggleOrder - 1 }
-        for position, name in ipairs(entries[info.key]) do
-            testArgs[name] = TimingsBox(name, testTimings)
-            toggles.args[info.key .. name] = {
-                type = "toggle",
-                name = name,
-                order = info.toggleOrder + position - 1,
-                get = function() return ns:IsEnabled(specName, name) end,
-                set = function(_, enabled) ns:SetEnabled(specName, name, enabled) end
-            }
-        end
-        tests.args[info.key] = { type = "group", name = info.testTab, order = index, args = testArgs }
-    end
-    return timings, tests, toggles
-end
-
-local function GeneralOptions()
-    return {
-        type = "group",
-        name = "General Options",
-        order = 1,
         args = {
             toggleDisplay = { type = "execute", name = "Toggle Display", width = 1, order = 1, func = function() ns:ToggleDisplay() end },
             resetDefaults = {
@@ -262,21 +314,21 @@ local function GeneralOptions()
                     ns:ResetDisplay()
                 end
             },
-            positionHeader = { type = "header", name = "Position", order = 10 },
+            positionHeader = Header("Position", 10),
             framePositionX = Option({ type = "range", name = "Display X Position", softMin = -1000, softMax = 1000, order = 11, step = 1, bigStep = 10 }, 'framePositionX', true),
             framePositionY = Option({ type = "range", name = "Display Y Position", softMin = -1000, softMax = 1000, order = 12, step = 1, bigStep = 10 }, 'framePositionY', true),
             growDirection = Option({ type = "select", name = "Grow Direction", order = 13, values = { top = 'top', bottom = 'bottom', left = 'left', right = 'right' } }, 'growDirection', true),
-            sizeHeader = { type = "header", name = "Size", order = 20 },
+            sizeHeader = Header("Size", 20),
             textSize = Option({ type = "range", name = "Main Text Size", min = 0.5, max = 5, order = 21, step = 0.1, bigStep = 0.1 }, 'textSize', true),
             timerSize = Option({ type = "range", name = "Timer Text Size", min = 0.5, max = 5, order = 22, step = 0.1, bigStep = 0.1 }, 'timerSize', true),
             iconSizeW = Option({ type = "range", name = "Icon Width", min = 10, max = 200, order = 23, step = 1, bigStep = 2 }, 'iconSizeW', true),
-            iconSizeH = Option({ type = "range", name = "Icon Height", min = 10, max = 200, order = 23, step = 1, bigStep = 2 }, 'iconSizeH', true),
-            displaySpacing = Option({ type = "range", name = "Display Spacing", min = 0, softMin = 40, max = 500, softMax = 300, order = 24, step = 1, bigStep = 5 }, 'displaySpacing', true),
-            ttsHeader = { type = "header", name = "Text to Speech", order = 30 },
+            iconSizeH = Option({ type = "range", name = "Icon Height", min = 10, max = 200, order = 24, step = 1, bigStep = 2 }, 'iconSizeH', true),
+            displaySpacing = Option({ type = "range", name = "Display Spacing", min = 0, softMin = 40, max = 500, softMax = 300, order = 25, step = 1, bigStep = 5 }, 'displaySpacing', true),
+            ttsHeader = Header("Text to Speech", 30),
             ttsPlay = {
                 type = "execute",
                 name = "Play Voice",
-                desc = "Plays a message to test the TTS. This won't work if TTS is disabled",
+                desc = "Plays a message to test the voice. This won't work if text to speech is off",
                 width = 1,
                 order = 31,
                 func = function() ns:SendTts('Zynx Ramp Helper') end
@@ -296,94 +348,72 @@ local function GeneralOptions()
             }, 'ttsVoice'),
             ttsRate = Option({ type = "range", name = "Rate", min = -10, max = 10, order = 34, step = 1, bigStep = 0.5 }, 'ttsRate'),
             ttsVolume = Option({ type = "range", name = "Volume", min = 0, max = 100, order = 35, step = 1, bigStep = 5 }, 'ttsVolume'),
-            mrtHeader = { type = "header", name = "Using MRT Note", order = 40 },
-            mrtDescription = {
-                type = "description",
-                name = "When one or both of the options below are enabled, the times in the addon are ignored and the times in the selected MRT notes " ..
-                    "are used instead. Boss ability lines (@...) in the addon still apply.",
-                order = 41
-            },
-            readFromNote = Option({ type = "toggle", name = "Read From Main MRT Note", desc = "Load assignments from the main MRT Note.", order = 42 }, 'readFromNote'),
-            mrtPersonalNote = Option({ type = "toggle", name = "Read From Personal MRT Note", desc = "Load assignments from the personal MRT Note.", order = 43 }, 'mrtPersonalNote'),
-            extraHeader = { type = "header", name = "Extra Options", order = 50 },
+            remindersHeader = Header("Reminders", 40),
             preReqsOnly = Option({
                 type = "toggle",
-                name = "Only Prerequisites Mode",
-                desc = "All the setup steps for a ramp are considered prerequisites, while the final cooldown button press is not. In this mode you will " ..
-                    "still be shown all the setup steps, but not the final warning to consume the ramp. In case you have another addon or weakaura that warns you of that.",
-                order = 51
+                name = "Only Setup Steps",
+                desc = "Leave out the final press of each ramp and only show the steps marked as setup, for when another addon or weakaura already warns you about the press.",
+                order = 41
             }, 'preReqsOnly'),
-            timerDuration = Option({ type = "range", name = "Timer Duration", min = 2, max = 10, order = 52, step = 1 }, 'timerDuration')
+            timerDuration = Option({
+                type = "range",
+                name = "Spell Countdown",
+                desc = "How many seconds before a spell in the plan its countdown starts",
+                min = 2,
+                max = 10,
+                order = 42,
+                step = 1
+            }, 'timerDuration'),
+            mrtHeader = Header("MRT Notes", 50),
+            mrtDescription = Text("With one of these on, the times of your plans are replaced by your lines in the selected MRT notes. " ..
+                "Boss ability lines in your plans still apply.", 51),
+            readFromNote = Option({ type = "toggle", name = "Use Main MRT Note", order = 52 }, 'readFromNote'),
+            mrtPersonalNote = Option({ type = "toggle", name = "Use Personal MRT Note", order = 53 }, 'mrtPersonalNote')
         }
     }
 end
 
-local ABOUT = "Zynx Ramp Helper reminds healers of every step of their raid ramps. Instead of setting up each part of a ramp as a separate " ..
-    "warning, you enter when a ramp should land and the addon reminds you of all the steps leading up to it.\n\n" ..
-    "The Timings tab has a page per spec with every boss on each difficulty. Type the times of each ramp or cooldown in the 'mm:ss' or 'ss' " ..
-    "format, one per line, and the reminders for them show when that boss is pulled. Ramp Types shows the steps of each ramp of a spec.\n\n" ..
-    "Phases follow BigWigs or DBM: a time written as '00:50, p2' counts from when your boss mod shows stage 2 (intermissions are stages " ..
-    "like p1.5). Without a boss mod you can start a phase yourself with '/zrh phase 2' from a macro.\n\n" ..
-    "A line can also follow a boss ability instead of a time, like '@Spectral Coils #2' for the second cast. The Boss Abilities tab of each " ..
-    "boss explains how and lists the abilities your boss mod showed on that boss.\n\n" ..
-    "The Options tab changes the size, position and voice of the reminders, and can read your times from MRT notes instead. To try the " ..
-    "reminders on a target dummy, turn on Testing Mode in the Testing tab.\n\n" ..
-    "Version " .. VERSION
-
-local function BuildOptionsTable()
-    local options = {
+local function TestingTab()
+    return {
         type = "group",
-        childGroups = "tab",
+        name = "Testing",
+        order = 4,
         args = {
-            timings = { type = "group", name = "Timings", childGroups = "select", order = 1, args = {} },
-            options = {
-                type = "group",
-                name = "Options",
-                childGroups = "tab",
+            help = Text("With testing mode on, starting combat with anything runs the test plan of your current spec, so you can try your reminders on a target dummy.", 1),
+            testMode = {
+                type = "toggle",
+                name = "Testing Mode",
                 order = 2,
-                args = {
-                    generalOptions = GeneralOptions(),
-                    specOptions = { type = "group", name = "Spec Options", childGroups = "select", order = 2, args = {} }
-                }
+                get = function() return ns.db.testing.testMode end,
+                set = function(_, enabled) ns.db.testing.testMode = enabled end
             },
-            testing = {
-                type = "group",
-                name = "Testing",
-                childGroups = 'select',
-                order = 3,
-                args = {
-                    testModeDescription = {
-                        type = "description",
-                        name = "When testing mode is enabled, starting combat with any entity will run the test timers for your current spec",
-                        fontSize = "medium",
-                        order = 1
-                    },
-                    testMode = {
-                        type = "toggle",
-                        name = "Enable Testing Mode",
-                        order = 2,
-                        get = function() return ns.db.testing.testMode end,
-                        set = function(_, enabled) ns.db.testing.testMode = enabled end
-                    }
-                }
-            },
-            about = {
-                type = "group",
-                name = "About",
+            spec = SpecSelect(3),
+            plan = {
+                type = "input",
+                name = "Test Plan",
                 order = 4,
-                args = {
-                    desc = { type = "description", name = ABOUT, order = 1, fontSize = "medium" }
-                }
+                multiline = 10,
+                width = "full",
+                get = function() return ns:GetTestPlan(SelectedSpec()) end,
+                set = function(_, text) ns:SetTestPlan(SelectedSpec(), text) end,
+                validate = function(_, text) return ns:CheckPlan(text) end
             }
         }
     }
-    for _, specName in pairs(ns.specs) do
-        local timings, tests, toggles = SpecOptions(specName)
-        options.args.timings.args[specName] = timings
-        options.args.testing.args[specName] = tests
-        options.args.options.args.specOptions.args[specName] = toggles
-    end
-    return options
+end
+
+local function BuildOptionsTable()
+    return {
+        type = "group",
+        childGroups = "tab",
+        args = {
+            plan = PlanTab(),
+            ramps = RampsTab(),
+            display = DisplayTab(),
+            testing = TestingTab(),
+            about = { type = "group", name = "About", order = 5, args = { text = Text(ABOUT, 1) } }
+        }
+    }
 end
 
 local loader = CreateFrame("Frame")
