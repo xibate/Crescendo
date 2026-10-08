@@ -22,8 +22,8 @@ Core\Fight.lua
 Core\BossMods.lua
 Core\Test.lua
 
-UI\Display.lua
 UI\Theme.lua
+UI\Display.lua
 UI\Window.lua
 UI\Planner.lua
 UI\RampsPage.lua

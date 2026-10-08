@@ -93,5 +93,5 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 | --- | --- |
 | [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities, from BigWigs |
 | [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
-| [UI](UI/) | `Display.lua` the on-screen reminders and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/zrh`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages |
+| [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/zrh`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages |
 | `main.lua` | Starts and stops the fight on encounter events |
