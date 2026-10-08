@@ -4,7 +4,17 @@ A World of Warcraft addon that reminds healers of every step of their raid ramps
 
 ## Installing
 
-Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it exactly `ZynxRampHelper`, otherwise WoW won't load it. Open the settings with `/zrh`.
+Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it exactly `ZynxRampHelper`, otherwise WoW won't load it. `/zrh` opens the planner, `/zrh settings` the settings.
+
+## Planner
+
+The planner window (`/zrh`) is the quick way to set up a boss, styled after EllesmereUI and using its accent colour and font when it is installed.
+
+1. On the left, pick your spec, the difficulty and the boss.
+2. In the middle, pick one of the boss's abilities. The number next to an ability is how many ramps or spells are assigned to it. Abilities your boss mod showed bars for, and ones named only in the plan, are listed below the boss's own.
+3. On the right, add an assignment: the ramp or cooldown (type it, or pick it from the menu), how many seconds before the ability it should land, and optionally which casts (like `2,4`, the number in brackets on the boss mod bar). The ramp's earlier steps show before that, so its messages come in time.
+
+Assignments are saved as ability lines in the boss's plan (`@Spectral Coils #2,4 -3 - Power Word: Barrier`). The Plan text tab shows and edits the whole plan, including times after the pull and stages.
 
 ## Plans
 
@@ -66,8 +76,8 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 
 | Folder | Contents |
 | --- | --- |
-| [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs and their starter ramps |
+| [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities, from BigWigs |
 | [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `BossMods.lua` BigWigs and DBM stages and bars, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
-| [UI](UI/) | `Display.lua` the on-screen reminders and text to speech, `Options.lua` the settings window |
+| [UI](UI/) | `Display.lua` the on-screen reminders and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Planner.lua` the planner window, `Options.lua` the settings window |
 | `main.lua` | Starts and stops the fight on encounter events |
 | [libs](libs/) | [Ace3](https://www.wowace.com/projects/ace3) for the settings window |

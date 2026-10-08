@@ -10,6 +10,18 @@ ns.specs = {
     [1468] = { key = "Preservation", name = "Preservation Evoker" }
 }
 
+--Cooldowns the planner offers for each spec next to its ramps, from Blizzard's list of tracked Midnight cooldowns
+--(plus Dream Flight, the choice next to Stasis).
+--Any other spell can still be typed in by name or spell id
+ns.specCooldowns = {
+    Discipline = { 62618, 33206, 10060, 19236 },
+    HolyPriest = { 64843, 200183, 47788, 10060 },
+    HolyPaladin = { 31884, 216331, 31821, 6940, 633 },
+    RestoDruid = { 740, 391528, 33891, 102342, 29166 },
+    RestoShaman = { 108280, 114052, 98008 },
+    Preservation = { 363534, 359816, 357170, 374227, 374968, 406732 }
+}
+
 --Spec key => display name
 ns.specNames = {}
 for _, spec in pairs(ns.specs) do

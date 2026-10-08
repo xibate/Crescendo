@@ -46,7 +46,7 @@ end
 
 --Builds the reminders of a fight from a plan. With MRT notes turned on, the times come from the notes and the boss
 --ability lines still come from the plan
-function ns:BuildFightPlan(specKey, planText, readNotes)
+function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
     ns.plan = {}
     ns.steps = {}
     ns.abilityAnchors = {}
@@ -75,6 +75,7 @@ function ns:BuildFightPlan(specKey, planText, readNotes)
     end
     for _, anchor in ipairs(plan.abilities) do
         if StepsFor(anchor.entry) then
+            ns:ResolveAnchor(anchor, encounterId)
             table.insert(ns.abilityAnchors, anchor)
         end
     end

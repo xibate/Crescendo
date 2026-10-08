@@ -19,6 +19,7 @@ local RAMP_HELP = "One step per line: |cffffd100when | text | options|r\n\n" ..
 
 local ABOUT = "Zynx Ramp Helper reminds healers of every step of their raid ramps. Write a plan per boss with when each ramp " ..
     "or cooldown should land, and the addon shows and speaks the steps leading up to it.\n\n" ..
+    "Planner (/zrh): pick a boss and one of its abilities, and assign ramps and cooldowns to land a number of seconds before it.\n" ..
     "Plan: the timings for each boss and difficulty, by time, by boss mod stage or by boss ability.\n" ..
     "Ramps: the steps of each ramp of your spec, change them or add your own.\n" ..
     "Display: size, position and voice of the reminders, and reading times from MRT notes.\n" ..
@@ -407,6 +408,18 @@ local function BuildOptionsTable()
         type = "group",
         childGroups = "tab",
         args = {
+            planner = {
+                type = "execute",
+                name = "Open Planner",
+                desc = "Assign ramps and cooldowns to boss abilities in the planner window (/zrh)",
+                order = 0,
+                func = function()
+                    if SettingsPanel and SettingsPanel:IsShown() then
+                        HideUIPanel(SettingsPanel)
+                    end
+                    ns:OpenPlanner()
+                end
+            },
             plan = PlanTab(),
             ramps = RampsTab(),
             display = DisplayTab(),
@@ -425,13 +438,19 @@ loader:SetScript("OnEvent", function(_, _, addonName)
     ns:InitDatabase()
     LibStub("AceConfig-3.0"):RegisterOptionsTable("Zynx Ramp Helper", BuildOptionsTable())
     local optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Zynx Ramp Helper", "Zynx Ramp Helper")
+    function ns:OpenSettings()
+        Settings.OpenToCategory(optionsFrame.name)
+    end
+    --/zrh opens the planner, /zrh settings the settings and /zrh phase 2 starts stage 2 without a boss mod
     SLASH_ZYNXRAMPHELPER1 = "/zrh"
     SlashCmdList.ZYNXRAMPHELPER = function(message)
         local phase = message:match("^%s*phase%s+(%d+%.?%d*)")
         if phase then
             ns:StartPhaseManually(phase)
+        elseif message:find("^%s*settings") or message:find("^%s*options") then
+            ns:OpenSettings()
         else
-            Settings.OpenToCategory(optionsFrame.name)
+            ns:TogglePlanner()
         end
     end
 end)

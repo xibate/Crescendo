@@ -111,6 +111,106 @@ function ns:CheckPlan(text)
     return true
 end
 
+--Boss abilities, as listed in Config/Abilities.lua, are { spellId, name }. An ability line names one by its name, or by
+--its spell id when the boss has two abilities with that name
+function ns:AbilityLineText(encounterId, ability)
+    if not ability.name then
+        return tostring(ability.spellId)
+    end
+    local sameName = 0
+    for _, other in ipairs(ns.bossAbilities[encounterId] or {}) do
+        if other.name:lower() == ability.name:lower() then
+            sameName = sameName + 1
+        end
+    end
+    if sameName > 1 and ability.spellId then
+        return tostring(ability.spellId)
+    end
+    return ability.name
+end
+
+local function LineMatchesAbility(anchor, ability)
+    if anchor.spellId then
+        return anchor.spellId == ability.spellId
+    end
+    return ability.name ~= nil and anchor.name == ability.name:lower()
+end
+
+local function SortedCasts(counts)
+    if not counts then
+        return nil
+    end
+    local casts = {}
+    for count in pairs(counts) do
+        table.insert(casts, count)
+    end
+    table.sort(casts)
+    return casts
+end
+
+local function FormatSeconds(seconds)
+    if seconds == math.floor(seconds) then
+        return tostring(seconds)
+    end
+    return string.format('%.1f', seconds)
+end
+
+--The assignments to one boss ability in a plan, one per ramp or spell in plan order:
+--{ casts = { 2, 4 } or nil for every cast, before = seconds before the ability the ramp lands, entry = ramp or spell }
+function ns:GetAbilityAssignments(planText, ability)
+    local assignments = {}
+    for line in ns:Lines(planText) do
+        local kind, parsed = ParseLine(line)
+        if kind == 'ability' and LineMatchesAbility(parsed, ability) then
+            for _, entry in ipairs(parsed.entries) do
+                table.insert(assignments, { casts = SortedCasts(parsed.counts), before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
+            end
+        end
+    end
+    return assignments
+end
+
+--An assignment as an ability line, like '@Spectral Coils #2,4 -3 - Evangelism'
+function ns:FormatAbilityLine(abilityText, assignment)
+    local line = '@' .. abilityText
+    if assignment.casts and #assignment.casts > 0 then
+        line = line .. ' #' .. table.concat(assignment.casts, ',')
+    end
+    local before = assignment.before or 0
+    if before > 0 then
+        line = line .. ' -' .. FormatSeconds(before)
+    elseif before < 0 then
+        line = line .. ' +' .. FormatSeconds(-before)
+    end
+    return line .. ' - ' .. Trim(assignment.entry)
+end
+
+--Replaces the assignments to one boss ability in a plan. Every other line stays where it is, the new ability lines go
+--where the first old one was, or at the end. Assignments without a ramp or spell are left out
+function ns:SetAbilityAssignments(planText, encounterId, ability, assignments)
+    local lines, insertAt = {}, nil
+    for line in ((planText or '') .. '\n'):gmatch('(.-)\r?\n') do
+        local kind, parsed = ParseLine(line)
+        if kind == 'ability' and LineMatchesAbility(parsed, ability) then
+            insertAt = insertAt or #lines + 1
+        else
+            table.insert(lines, line)
+        end
+    end
+    while #lines > 0 and lines[#lines]:find('^%s*$') do
+        table.remove(lines)
+    end
+    insertAt = math.min(insertAt or #lines + 1, #lines + 1)
+    local abilityText = ns:AbilityLineText(encounterId, ability)
+    for _, assignment in ipairs(assignments) do
+        if assignment.entry and assignment.entry:find('%S') then
+            table.insert(lines, insertAt, ns:FormatAbilityLine(abilityText, assignment))
+            insertAt = insertAt + 1
+        end
+    end
+    return table.concat(lines, '\n')
+end
+
 --Only the boss ability lines and comments of a plan, kept when times are imported from a note
 function ns:KeepAbilityLines(text)
     local kept = {}

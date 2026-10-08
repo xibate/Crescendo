@@ -73,10 +73,36 @@ local function RememberAbility(name, spellId)
     end
 end
 
+--The spell ids and names an ability line can show up under on a boss mod bar. BigWigs names its bars after the game's
+--(localized) spell name and DBM can use other spell ids, so a line by name also matches the ids the boss's ability list
+--has for that name, and a line by id also matches the names of that spell
+function ns:ResolveAnchor(anchor, encounterId)
+    anchor.spellIds = {}
+    anchor.names = {}
+    local function AddSpell(spellId)
+        anchor.spellIds[spellId] = true
+        local info = C_Spell.GetSpellInfo(spellId)
+        if info and info.name then
+            anchor.names[info.name:lower()] = true
+        end
+    end
+    if anchor.spellId then
+        AddSpell(anchor.spellId)
+    else
+        anchor.names[anchor.name] = true
+    end
+    for _, ability in ipairs(ns.bossAbilities[encounterId] or {}) do
+        if ability.spellId == anchor.spellId or ability.name:lower() == anchor.name then
+            AddSpell(ability.spellId)
+            anchor.names[ability.name:lower()] = true
+        end
+    end
+end
+
 local function MatchingAnchors(name, spellId, count)
     local matches = {}
     for _, anchor in ipairs(ns.abilityAnchors) do
-        local sameAbility = (anchor.spellId and anchor.spellId == spellId) or anchor.name == name:lower()
+        local sameAbility = (spellId and anchor.spellIds[spellId]) or anchor.names[name:lower()]
         if sameAbility and (not anchor.counts or (count and anchor.counts[count])) then
             table.insert(matches, anchor)
         end

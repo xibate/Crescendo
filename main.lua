@@ -18,7 +18,7 @@ local function OnFightStart(event, encounterId, encounterName, difficultyId)
     if isTest then
         ns:BuildFightPlan(specKey, ns:GetTestPlan(specKey), false)
     else
-        ns:BuildFightPlan(specKey, ns:GetPlan(specKey, ns.difficulties[difficultyId].slug, encounterId), true)
+        ns:BuildFightPlan(specKey, ns:GetPlan(specKey, ns.difficulties[difficultyId].slug, encounterId), true, encounterId)
     end
     ns:ResetAbilityTimings()
     ns:StartFight(specKey, not isTest and encounterId or nil)

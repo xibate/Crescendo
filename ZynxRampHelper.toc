@@ -14,6 +14,7 @@ libs\AceConfig-3.0\AceConfig-3.0.xml
 
 Config\Bosses.lua
 Config\Specs.lua
+Config\Abilities.lua
 
 Core\Util.lua
 Core\Database.lua
@@ -25,6 +26,8 @@ Core\Fight.lua
 Core\BossMods.lua
 
 UI\Display.lua
+UI\Theme.lua
+UI\Planner.lua
 UI\Options.lua
 
 main.lua
