@@ -4,12 +4,12 @@ local DATABASE_VERSION = 3
 
 --Saved settings:
 -- options        display, text to speech and MRT note settings
--- testing        testMode
 -- plans          plans[spec][difficulty slug][encounter id] = plan text, see Core/PlanText.lua
--- testPlans      testPlans[spec] = plan text used in testing mode
+-- testPlans      testPlans[spec] = plan text of the old testing mode, no longer used
 -- ramps          ramps[spec][ramp name] = { spellId = spell MRT notes use, steps = steps text, see Core/Ramps.lua }
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
--- ui             what is selected in the options window
+-- recordings     recordings[encounter id][difficulty slug] = the longest recorded pull, see Core/Test.lua
+-- ui             what is selected in the window
 local defaults = {
     options = {
         toggleDisplay = false,
@@ -30,11 +30,11 @@ local defaults = {
         mrtPersonalNote = false,
         timerDuration = 3
     },
-    testing = { testMode = false },
     plans = {},
     testPlans = {},
     ramps = {},
     seenAbilities = {},
+    recordings = {},
     ui = {}
 }
 
@@ -210,14 +210,6 @@ end
 
 function ns:SetPlan(specKey, diffSlug, encounterId, text)
     Child(Child(ns.db.plans, specKey), diffSlug)[tostring(encounterId)] = text
-end
-
-function ns:GetTestPlan(specKey)
-    return ns.db.testPlans[specKey] or ''
-end
-
-function ns:SetTestPlan(specKey, text)
-    ns.db.testPlans[specKey] = text
 end
 
 --Ramps of a spec, by name: { spellId, steps }

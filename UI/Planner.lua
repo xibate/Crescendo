@@ -1,16 +1,14 @@
 local _, ns = ...
 
---The planner window (/zrh): pick a spec, difficulty and boss on the left, one of the boss's abilities in the middle, and
---assign ramps or spells to it on the right, for every cast or chosen casts, landing a number of seconds before the
---ability. Assignments are saved as ability lines in the boss's plan, which the Plan text tab shows in full
+--The Plans page: pick a spec, difficulty and boss on the left, one of the boss's abilities in the middle, and assign
+--ramps or spells to it on the right, for every cast or chosen casts, landing a number of seconds before the ability.
+--Assignments are saved as ability lines in the boss's plan, which the Plan text tab shows in full
 
 local theme = ns.theme
-local WIDTH, HEIGHT = 900, 560
-local HEADER = 44
-local LEFT_X, LEFT_W = 14, 196
-local MID_X, MID_W = 224, 272
-local RIGHT_X = 510
-local RIGHT_W = WIDTH - RIGHT_X - 14
+local LEFT_X, LEFT_W = 0, 196
+local MID_X, MID_W = 210, 276
+local RIGHT_X = 500
+local RIGHT_W = 432
 local ROW_H = 26
 local QUESTION_MARK = 134400
 
@@ -23,6 +21,10 @@ end
 local function Accent(alpha)
     local r, g, b = ns:GetAccent()
     return r, g, b, alpha or 1
+end
+
+local function ErrorColor(alpha)
+    return theme.error[1], theme.error[2], theme.error[3], alpha or 1
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -38,18 +40,33 @@ local function SortedBossIds()
     return ids
 end
 
-local function Selected()
+--The spec selected in the window, the player's own spec at first
+function ns:SelectedSpec()
     local ui = UI()
     if not ns.specNames[ui.spec or ''] then
         ui.spec = ns:GetPlayerSpecKey() or 'Discipline'
     end
+    return ui.spec
+end
+
+function ns:SpecMenuItems()
+    local items = {}
+    for _, info in pairs(ns.specs) do
+        table.insert(items, { text = info.name, value = info.key })
+    end
+    table.sort(items, function(a, b) return a.text < b.text end)
+    return items
+end
+
+local function Selected()
+    local ui = UI()
     if not ns.difficulties[ui.difficulty or 0] then
         ui.difficulty = 16
     end
     if not ns.bosses[ui.boss or 0] then
         ui.boss = SortedBossIds()[1]
     end
-    return ui.spec, ns.difficulties[ui.difficulty].slug, ui.boss
+    return ns:SelectedSpec(), ns.difficulties[ui.difficulty].slug, ui.boss
 end
 
 local function GetPlanText()
@@ -121,147 +138,125 @@ local function SelectedAbility(abilities)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Window
+-- What an assignment does
 ------------------------------------------------------------------------------------------------------------------------
 
-local function CreateWindow()
-    local frame = CreateFrame("Frame", "ZynxRampHelperPlanner", UIParent)
-    frame:SetSize(WIDTH, HEIGHT)
-    frame:SetFrameStrata("DIALOG")
-    frame:SetToplevel(true)
-    frame:SetClampedToScreen(true)
-    frame:EnableMouse(true)
-    frame:SetMovable(true)
-    frame:RegisterForDrag("LeftButton")
-    frame:SetScript("OnDragStart", frame.StartMoving)
-    frame:SetScript("OnDragStop", function(self)
-        self:StopMovingOrSizing()
-        local point, _, relativePoint, x, y = self:GetPoint()
-        UI().plannerPoint = { point, relativePoint, x, y }
-    end)
-    frame:SetScript("OnHide", function()
-        ns:CloseMenu()
-    end)
-    table.insert(UISpecialFrames, "ZynxRampHelperPlanner")
-    ns:Fill(frame, theme.window)
-    ns:Border(frame, theme.border)
-
-    local title = ns:Text(frame, 15)
-    title:SetPoint("TOPLEFT", 16, -14)
-    title:SetText("Zynx Ramp Helper")
-    title:SetTextColor(Accent())
-    local subtitle = ns:Text(frame, 12, theme.dim)
-    subtitle:SetPoint("LEFT", title, "RIGHT", 10, -1)
-    subtitle:SetText("Planner")
-
-    local close = ns:Button(frame, "x", 24, 24, function() frame:Hide() end)
-    close:SetPoint("TOPRIGHT", -12, -10)
-    local settings = ns:Button(frame, "Settings", 84, 24, function()
-        frame:Hide()
-        ns:OpenSettings()
-    end)
-    settings:SetPoint("RIGHT", close, "LEFT", -6, 0)
-
-    local rule = frame:CreateTexture(nil, "ARTWORK")
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 1, -HEADER)
-    rule:SetPoint("TOPRIGHT", -1, -HEADER)
-    rule:SetColorTexture(Accent(0.55))
-
-    planner = { frame = frame }
-    return frame
+local function Seconds(value)
+    return string.format("%gs", math.floor(value * 10 + 0.5) / 10)
 end
 
-local function Column(x, width)
-    local column = CreateFrame("Frame", nil, planner.frame)
-    column:SetPoint("TOPLEFT", x, -HEADER - 12)
-    column:SetPoint("BOTTOMLEFT", x, 14)
-    column:SetWidth(width)
-    return column
+local function CastsText(casts)
+    return casts and ("cast " .. table.concat(casts, ', ')) or "every cast"
+end
+
+local function TimingText(before)
+    if before > 0 then
+        return Seconds(before) .. " before"
+    elseif before < 0 then
+        return Seconds(-before) .. " after"
+    end
+    return "at"
+end
+
+--The steps of an assignment, each with how many seconds before the ability it shows, or nil when the ramp or spell isn't known
+local function AssignmentSchedule(assignment)
+    local steps = ns:GetEntrySteps(ns:SelectedSpec(), assignment.entry or '')
+    if not steps then
+        return nil
+    end
+    local schedule = {}
+    for _, step in ipairs(steps) do
+        if ns:ShouldUseStep(step) then
+            table.insert(schedule, { step = step, before = (assignment.before or 0) + (step.offset or 0) })
+        end
+    end
+    table.sort(schedule, function(a, b) return a.before > b.before end)
+    return schedule
+end
+
+--What an assignment does, in a line, and whether something is wrong with it
+local function DescribeAssignment(assignment)
+    local entry = assignment.entry or ''
+    if not entry:find('%S') then
+        return "Pick a ramp or spell", false
+    end
+    local schedule = AssignmentSchedule(assignment)
+    if not schedule then
+        return "Not a ramp or a spell you know", true
+    end
+    local before = assignment.before or 0
+    local text = "Lands " .. TimingText(before) .. " " .. CastsText(assignment.casts)
+    local first = schedule[1]
+    if first and first.before > before then
+        text = text .. "  ·  first message " .. TimingText(first.before) .. " it"
+    end
+    return text, false
+end
+
+--Every message of an assignment and when it shows, in the tooltip of its description
+local function AssignmentTooltip(tooltip, assignment)
+    local schedule = assignment and AssignmentSchedule(assignment)
+    if not schedule or #schedule == 0 then
+        return false
+    end
+    tooltip:SetText(assignment.entry, 1, 1, 1)
+    tooltip:AddLine("When each message shows, counted from the boss ability:", 0.7, 0.7, 0.7, true)
+    for _, item in ipairs(schedule) do
+        local when
+        if item.step.chargesOf then
+            when = "charges"
+        else
+            when = TimingText(item.before)
+        end
+        tooltip:AddDoubleLine(item.step.text, when, 1, 1, 1, Accent())
+    end
+    if ns:FindRamp(ns:SelectedSpec(), assignment.entry) then
+        tooltip:AddLine("The steps come from the ramp, change them on the Ramps page. Steps counted in global cooldowns use your haste.", 0.7, 0.7, 0.7, true)
+    else
+        tooltip:AddLine("A spell gets a countdown first, its length is set on the Display page.", 0.7, 0.7, 0.7, true)
+    end
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Left: spec, difficulty and boss
+-- Left: spec, difficulty, boss and test
 ------------------------------------------------------------------------------------------------------------------------
 
 local Refresh
 
---A selectable list row with an accent bar on the left when selected
-local function ListRow(parent, height)
-    local row = CreateFrame("Button", nil, parent)
-    row:SetHeight(height or ROW_H)
-    row.background = ns:Fill(row, { 1, 1, 1, 0 }, "BACKGROUND")
-    row.bar = row:CreateTexture(nil, "ARTWORK")
-    row.bar:SetWidth(2)
-    row.bar:SetPoint("TOPLEFT")
-    row.bar:SetPoint("BOTTOMLEFT")
-    row.label = ns:Text(row, 12)
-    function row:SetSelected(selected)
-        self.selected = selected
-        if selected then
-            self.bar:SetColorTexture(Accent())
-            self.bar:Show()
-            self.background:SetColorTexture(1, 1, 1, 0.07)
-            self.label:SetTextColor(1, 1, 1, 1)
-        else
-            self.bar:Hide()
-            self.background:SetColorTexture(1, 1, 1, 0)
-            self.label:SetTextColor(1, 1, 1, 0.7)
-        end
-    end
-    row:SetScript("OnEnter", function(self) if not self.selected then self.background:SetColorTexture(1, 1, 1, 0.04) end end)
-    row:SetScript("OnLeave", function(self) self:SetSelected(self.selected) end)
-    return row
+local function Column(page, x, width)
+    local column = CreateFrame("Frame", nil, page)
+    column:SetPoint("TOPLEFT", x, 0)
+    column:SetPoint("BOTTOMLEFT", x, 0)
+    column:SetWidth(width)
+    return column
 end
 
-local function BuildLeft()
-    local left = Column(LEFT_X, LEFT_W)
-    local specLabel = ns:SectionLabel(left, "Spec")
-    specLabel:SetPoint("TOPLEFT", 0, 0)
-    local spec = ns:Button(left, "", LEFT_W, 26)
-    spec:SetPoint("TOPLEFT", 0, -16)
-    spec.label:ClearAllPoints()
-    spec.label:SetPoint("LEFT", 10, 0)
-    spec.label:SetPoint("RIGHT", -24, 0)
-    spec.label:SetJustifyH("LEFT")
-    local arrow = ns:Text(spec, 11, theme.dim, "RIGHT")
-    arrow:SetPoint("RIGHT", -10, 0)
-    arrow:SetText("v")
-    spec:SetScript("OnClick", function(self)
-        local items = {}
-        for _, info in pairs(ns.specs) do
-            table.insert(items, { text = info.name, value = info.key })
-        end
-        table.sort(items, function(a, b) return a.text < b.text end)
-        ns:OpenMenu(self, items, function(specKey)
+local function BuildLeft(page)
+    local left = Column(page, LEFT_X, LEFT_W)
+    ns:SectionLabel(left, "Spec"):SetPoint("TOPLEFT", 0, 0)
+    planner.specButton = ns:Dropdown(left, LEFT_W, 26, function() return ns.specNames[ns:SelectedSpec()] end,
+        function() return ns:SpecMenuItems() end, function(specKey)
             UI().spec = specKey
             UI().ability = nil
             Refresh()
         end)
+    planner.specButton:SetPoint("TOPLEFT", 0, -16)
+
+    ns:SectionLabel(left, "Difficulty"):SetPoint("TOPLEFT", 0, -56)
+    planner.difficulty = ns:Segmented(left, {
+        { text = ns.difficulties[15].name, value = 15 },
+        { text = ns.difficulties[16].name, value = 16 }
+    }, LEFT_W, 26, function() return UI().difficulty end, function(diffId)
+        UI().difficulty = diffId
+        Refresh()
     end)
-    planner.specButton = spec
+    planner.difficulty:SetPoint("TOPLEFT", 0, -72)
 
-    local diffLabel = ns:SectionLabel(left, "Difficulty")
-    diffLabel:SetPoint("TOPLEFT", 0, -56)
-    planner.difficultyButtons = {}
-    local x = 0
-    for _, diffId in ipairs({ 15, 16 }) do
-        local button = ns:Button(left, ns.difficulties[diffId].name, (LEFT_W - 6) / 2, 26, function()
-            UI().difficulty = diffId
-            Refresh()
-        end)
-        button:SetPoint("TOPLEFT", x, -72)
-        button.diffId = diffId
-        planner.difficultyButtons[diffId] = button
-        x = x + (LEFT_W - 6) / 2 + 6
-    end
-
-    local bossLabel = ns:SectionLabel(left, "Boss")
-    bossLabel:SetPoint("TOPLEFT", 0, -112)
+    ns:SectionLabel(left, "Boss"):SetPoint("TOPLEFT", 0, -112)
     planner.bossRows = {}
     local y = -128
     for _, encounterId in ipairs(SortedBossIds()) do
-        local row = ListRow(left)
+        local row = ns:ListRow(left, ROW_H)
         row:SetPoint("TOPLEFT", 0, y)
         row:SetPoint("TOPRIGHT", 0, y)
         row.label:SetPoint("LEFT", 12, 0)
@@ -276,18 +271,87 @@ local function BuildLeft()
         planner.bossRows[encounterId] = row
         y = y - ROW_H
     end
+
+    planner.replay = ns:Button(left, "Replay pull", LEFT_W, 26, function()
+        if ns:IsTesting() then
+            ns:StopTest()
+            return
+        end
+        local specKey, diffSlug, boss = Selected()
+        ns:StartTest(specKey, diffSlug, boss)
+    end, true)
+    planner.replay:SetPoint("BOTTOMLEFT", 0, 0)
+    planner.recordingInfo = ns:Text(left, 10, theme.dim)
+    planner.recordingInfo:SetPoint("BOTTOMLEFT", planner.replay, "TOPLEFT", 0, 6)
+    planner.recordingInfo:SetPoint("RIGHT", left, "RIGHT", 0, 0)
+    planner.recordingInfo:SetWordWrap(true)
+    planner.recordingInfo:SetJustifyV("BOTTOM")
+    local testLabel = ns:SectionLabel(left, "Test")
+    testLabel:SetPoint("BOTTOMLEFT", planner.recordingInfo, "TOPLEFT", 0, 6)
+    local testHelp = ns:HelpIcon(left, "Testing a plan",
+        "Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. Replay pull runs the " ..
+        "longest recorded pull of the selected boss and difficulty again with your current plan, so its reminders show and " ..
+        "speak as they would in the raid. Nothing has to be pulled, it works anywhere, also while hitting a target dummy.\n\n" ..
+        "Without a recorded pull, test one ability with Test cast on the right.")
+    testHelp:SetPoint("LEFT", testLabel, "RIGHT", 6, 0)
+end
+
+local function RefreshTest()
+    local _, diffSlug, boss = Selected()
+    local recording = ns:GetRecording(boss, diffSlug)
+    local testing = ns:IsTesting()
+    if recording then
+        planner.recordingInfo:SetText("Recorded pull of " .. ns:FormatTime(recording.duration) .. " on " .. recording.date ..
+            ", replayed with this plan.")
+    else
+        planner.recordingInfo:SetText("No pull of this boss recorded yet. Pull it once with BigWigs or DBM to replay it here.")
+    end
+    planner.replay.label:SetText(testing and "Stop test" or "Replay pull")
+    planner.replay:SetAlpha((recording or testing) and 1 or 0.4)
+    planner.replay:SetEnabled(recording ~= nil or testing)
+    if planner.testCast then
+        planner.testCast.label:SetText(testing and "Stop test" or "Test cast")
+    end
 end
 
 ------------------------------------------------------------------------------------------------------------------------
 -- Middle: the boss's abilities
 ------------------------------------------------------------------------------------------------------------------------
 
-local function BuildMiddle()
-    local middle = Column(MID_X, MID_W)
+local function AbilityTooltip(tooltip, row)
+    local ability = row.ability
+    if not ability then
+        return false
+    end
+    if ability.spellId and tooltip.SetSpellByID then
+        tooltip:SetSpellByID(ability.spellId)
+    else
+        tooltip:SetText(ability.name or tostring(ability.spellId), 1, 1, 1)
+    end
+    tooltip:AddLine(" ")
+    if ability.group then
+        tooltip:AddLine(ability.group, 0.7, 0.7, 0.7, true)
+    end
+    if ability.spellId then
+        tooltip:AddLine("Spell id " .. ability.spellId, 0.5, 0.5, 0.5)
+    end
+    local assignments = ns:GetAbilityAssignments(GetPlanText(), ability)
+    if #assignments > 0 then
+        tooltip:AddLine(" ")
+        tooltip:AddLine("Assigned", Accent())
+        for _, assignment in ipairs(assignments) do
+            tooltip:AddDoubleLine(assignment.entry, TimingText(assignment.before) .. " " .. CastsText(assignment.casts), 1, 1, 1, 0.7, 0.7, 0.7)
+        end
+    else
+        tooltip:AddLine("Click to assign a ramp or cooldown to it", 0.7, 0.7, 0.7)
+    end
+end
+
+local function BuildMiddle(page)
+    local middle = Column(page, MID_X, MID_W)
     ns:Fill(middle, theme.well)
     ns:Border(middle, theme.border)
-    local label = ns:SectionLabel(middle, "Boss abilities")
-    label:SetPoint("TOPLEFT", 10, -10)
+    ns:SectionLabel(middle, "Boss abilities"):SetPoint("TOPLEFT", 10, -10)
     local hint = ns:Text(middle, 10, theme.section, "RIGHT")
     hint:SetPoint("TOPRIGHT", -10, -10)
     hint:SetText("ASSIGNED")
@@ -304,8 +368,7 @@ local function AbilityRow(index)
     if row then
         return row
     end
-    local list = planner.abilityList
-    row = ListRow(list.content)
+    row = ns:ListRow(planner.abilityList.content, ROW_H)
     row.icon = row:CreateTexture(nil, "ARTWORK")
     row.icon:SetSize(18, 18)
     row.icon:SetPoint("LEFT", 10, 0)
@@ -318,6 +381,7 @@ local function AbilityRow(index)
         UI().ability = AbilityKey(self.ability)
         Refresh()
     end)
+    ns:Tooltip(row, AbilityTooltip)
     planner.abilityRows[index] = row
     return row
 end
@@ -373,10 +437,17 @@ local function RefreshAbilities(abilities, selected, planText)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Right: assignments of the selected ability, and the plan text
+-- Right: assignments of the selected ability
 ------------------------------------------------------------------------------------------------------------------------
 
-local COLUMNS = { casts = 0, entry = 72, menu = 244, before = 276, delete = 340 }
+local COLUMNS = { casts = 0, entry = 78, menu = 282, before = 316, delete = 384 }
+
+local CASTS_HELP = "BigWigs and DBM number each cast of an ability in a fight: the bar shows 'Spectral Coils (2)' before " ..
+    "the second one. Leave this empty to have the assignment on every cast, or list the casts it is for, like 2,4 for the " ..
+    "second and fourth.\n\nThe count can start over in a new stage, the same way the boss mod's does."
+local BEFORE_HELP = "How many seconds before the ability goes off your ramp or spell should land: the last step of a ramp, " ..
+    "or the cast of a spell. The earlier steps of the ramp show before that, as far ahead as the ramp says, so the first " ..
+    "message comes in time to start it.\n\nUse a negative number to land after the ability."
 
 local function ParseCasts(text)
     local casts = {}
@@ -414,65 +485,37 @@ local function EntryMenuItems(specKey)
     return items
 end
 
---What an assignment does, in words, or what is wrong with it
-local function DescribeAssignment(assignment)
-    local specKey = Selected()
-    local entry = assignment.entry or ''
-    if not entry:find('%S') then
-        return "Pick a ramp or spell", false
-    end
-    local steps = ns:GetEntrySteps(specKey, entry)
-    if not steps then
-        return "Not a ramp or a spell you know", true
-    end
-    local first = 0
-    for _, step in ipairs(steps) do
-        first = math.max(first, step.offset or 0)
-    end
-    local before = assignment.before or 0
-    local casts = assignment.casts and ("cast " .. table.concat(assignment.casts, ', ')) or "every cast"
-    local timing = "at"
-    if before > 0 then
-        timing = string.format("%gs before", before)
-    elseif before < 0 then
-        timing = string.format("%gs after", -before)
-    end
-    if first > 0 then
-        return string.format("Lands %s %s, first message %gs earlier", timing, casts, math.floor(first * 10 + 0.5) / 10), false
-    end
-    return string.format("Shows %s %s", timing, casts), false
-end
-
 local function AssignmentRow(index)
     local row = planner.assignmentRows[index]
     if row then
         return row
     end
-    local parent = planner.assignmentList.content
-    row = CreateFrame("Frame", nil, parent)
+    row = CreateFrame("Frame", nil, planner.assignmentList.content)
     row:SetHeight(46)
-    row.casts = ns:EditBox(row, 64, 26, function(text)
+    row.casts = ns:EditBox(row, COLUMNS.entry - 8, 26, function(text)
         row.assignment.casts = ParseCasts(text)
-        row.casts:SetValue(row.assignment.casts and table.concat(row.assignment.casts, ',') or '')
         SaveAssignments()
         Refresh(true)
     end)
     row.casts:SetPoint("TOPLEFT", COLUMNS.casts, 0)
+    row.casts:SetPlaceholder("all")
     row.entry = ns:EditBox(row, COLUMNS.menu - COLUMNS.entry - 2, 26, function(text)
         row.assignment.entry = text:match('^%s*(.-)%s*$')
         SaveAssignments()
         Refresh(true)
     end)
     row.entry:SetPoint("TOPLEFT", COLUMNS.entry, 0)
-    row.menu = ns:Button(row, "v", 26, 26, function(self)
-        ns:OpenMenu(row.entry, EntryMenuItems((Selected())), function(value)
+    row.entry:SetPlaceholder("ramp or spell")
+    row.menu = ns:Button(row, "v", 26, 26, function()
+        ns:OpenMenu(row.entry, EntryMenuItems(ns:SelectedSpec()), function(value)
             row.assignment.entry = value
             SaveAssignments()
             Refresh(true)
         end)
     end)
     row.menu:SetPoint("TOPLEFT", COLUMNS.menu, 0)
-    row.before = ns:EditBox(row, 54, 26, function(text)
+    ns:Tooltip(row.menu, "Pick a ramp or cooldown")
+    row.before = ns:EditBox(row, COLUMNS.delete - COLUMNS.before - 8, 26, function(text)
         row.assignment.before = tonumber(text) or 0
         SaveAssignments()
         Refresh(true)
@@ -484,11 +527,33 @@ local function AssignmentRow(index)
         Refresh(true)
     end)
     row.delete:SetPoint("TOPLEFT", COLUMNS.delete, 0)
-    row.note = ns:Text(row, 10, theme.dim)
-    row.note:SetPoint("TOPLEFT", COLUMNS.entry + 2, -29)
-    row.note:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    ns:Tooltip(row.delete, "Remove this assignment")
+    row.noteFrame = CreateFrame("Frame", nil, row)
+    row.noteFrame:SetPoint("TOPLEFT", COLUMNS.entry, -28)
+    row.noteFrame:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+    row.noteFrame:SetHeight(16)
+    row.noteFrame:EnableMouse(true)
+    row.note = ns:Text(row.noteFrame, 10, theme.dim)
+    row.note:SetPoint("LEFT", 2, 0)
+    row.note:SetPoint("RIGHT", 0, 0)
+    ns:Tooltip(row.noteFrame, function(tooltip) return AssignmentTooltip(tooltip, row.assignment) end)
     planner.assignmentRows[index] = row
     return row
+end
+
+local function TestCast()
+    if ns:IsTesting() then
+        ns:StopTest()
+        return
+    end
+    if not planner.ability then
+        return
+    end
+    local specKey, diffSlug, boss = Selected()
+    local count = tonumber(planner.testCount:GetText()) or 1
+    local seconds = tonumber(planner.testSeconds:GetText()) or 15
+    UI().testSeconds = seconds
+    ns:StartTest(specKey, diffSlug, boss, { ability = planner.ability, count = count, seconds = seconds })
 end
 
 local function BuildAssignmentsTab(panel)
@@ -505,15 +570,23 @@ local function BuildAssignmentsTab(panel)
     planner.abilityName:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
     planner.abilityInfo = ns:Text(tab, 10, theme.dim)
     planner.abilityInfo:SetPoint("BOTTOMLEFT", planner.abilityIcon, "BOTTOMRIGHT", 10, 1)
+    planner.abilityInfo:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
 
-    local headers = { { "Casts", COLUMNS.casts }, { "Ramp or spell", COLUMNS.entry }, { "Sec before", COLUMNS.before } }
+    local headers = {
+        { "Which casts", COLUMNS.casts, CASTS_HELP },
+        { "Ramp or spell", COLUMNS.entry },
+        { "Sec before", COLUMNS.before, BEFORE_HELP }
+    }
     for _, header in ipairs(headers) do
         local label = ns:SectionLabel(tab, header[1])
         label:SetPoint("TOPLEFT", header[2], -48)
+        if header[3] then
+            ns:HelpIcon(tab, header[1], header[3]):SetPoint("LEFT", label, "RIGHT", 4, 0)
+        end
     end
     local list = ns:ScrollList(tab)
     list:SetPoint("TOPLEFT", 0, -64)
-    list:SetPoint("BOTTOMRIGHT", 0, 104)
+    list:SetPoint("BOTTOMRIGHT", 0, 118)
     planner.assignmentList = list
     planner.assignmentRows = {}
 
@@ -523,85 +596,129 @@ local function BuildAssignmentsTab(panel)
             Refresh(true)
         end
     end, true)
-    planner.addButton:SetPoint("BOTTOMLEFT", 0, 70)
+    planner.addButton:SetPoint("BOTTOMLEFT", 0, 82)
 
     planner.empty = ns:Text(tab, 12, theme.dim)
     planner.empty:SetPoint("TOPLEFT", 0, -70)
     planner.empty:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
     planner.empty:SetWordWrap(true)
 
-    local help = ns:Text(tab, 10, theme.dim)
-    help:SetPoint("BOTTOMLEFT", 0, 0)
-    help:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
-    help:SetHeight(60)
-    help:SetJustifyV("BOTTOM")
-    help:SetWordWrap(true)
-    help:SetText("Casts: leave empty for every cast, or list them like 2,4 using the number in brackets on your boss mod's bar. " ..
-        "Sec before: the ramp's last step lands this many seconds before the ability, its earlier steps show before that. " ..
-        "Abilities follow the bars of BigWigs or DBM, so the bar has to be enabled there.")
+    --Testing one cast of the ability
+    local rule = tab:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("BOTTOMLEFT", 0, 66)
+    rule:SetPoint("BOTTOMRIGHT", 0, 66)
+    rule:SetColorTexture(1, 1, 1, 0.06)
+    local testLabel = ns:SectionLabel(tab, "Test cast")
+    testLabel:SetPoint("BOTTOMLEFT", 0, 46)
+    local castText = ns:Text(tab, 11, theme.dim)
+    castText:SetPoint("BOTTOMLEFT", 0, 13)
+    castText:SetText("Cast")
+    planner.testCount = ns:EditBox(tab, 40, 24)
+    planner.testCount:SetPoint("LEFT", castText, "RIGHT", 6, 0)
+    local inText = ns:Text(tab, 11, theme.dim)
+    inText:SetPoint("LEFT", planner.testCount, "RIGHT", 8, 0)
+    inText:SetText("goes off in")
+    planner.testSeconds = ns:EditBox(tab, 44, 24)
+    planner.testSeconds:SetPoint("LEFT", inText, "RIGHT", 6, 0)
+    local secondsText = ns:Text(tab, 11, theme.dim)
+    secondsText:SetPoint("LEFT", planner.testSeconds, "RIGHT", 6, 0)
+    secondsText:SetText("seconds")
+    planner.testCast = ns:Button(tab, "Test cast", 110, 26, TestCast, true)
+    planner.testCast:SetPoint("BOTTOMRIGHT", 0, 12)
+    ns:Tooltip(planner.testCast, "Test cast",
+        "Pretends your boss mod shows a bar for this cast of the ability, and shows the reminders of its assignments as they " ..
+        "would come. Other lines of the plan are left out.")
 end
+
+------------------------------------------------------------------------------------------------------------------------
+-- Right: plan text and MRT note
+------------------------------------------------------------------------------------------------------------------------
 
 local function BuildPlanTextTab(panel)
     local tab = CreateFrame("Frame", nil, panel)
     tab:SetAllPoints()
     planner.planTextTab = tab
-    local well = CreateFrame("Frame", nil, tab)
-    well:SetPoint("TOPLEFT", 0, 0)
-    well:SetPoint("BOTTOMRIGHT", 0, 64)
-    ns:Fill(well, theme.input)
-    ns:Border(well, theme.borderStrong)
-    local scroll = ns:ScrollList(well)
-    scroll:SetPoint("TOPLEFT", 8, -8)
-    scroll:SetPoint("BOTTOMRIGHT", -8, 8)
-    local box = CreateFrame("EditBox", nil, scroll)
-    box:SetMultiLine(true)
-    box:SetAutoFocus(false)
-    box:SetFont(ns:GetFont(), 12, "")
-    box:SetTextColor(1, 1, 1, 0.9)
-    box:SetWidth(RIGHT_W - 20)
-    box:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    box:SetScript("OnTextChanged", function(self, userInput)
-        if userInput then
-            planner.planStatus:SetText("Not saved yet")
-            planner.planStatus:SetTextColor(1, 1, 1, 0.53)
-        end
+    local area = ns:TextArea(tab, function()
+        planner.planStatus:SetText("Not saved yet")
+        planner.planStatus:SetTextColor(1, 1, 1, 0.53)
     end)
-    scroll:SetScrollChild(box)
-    planner.planBox = box
-    well:EnableMouse(true)
-    well:SetScript("OnMouseDown", function() box:SetFocus() end)
+    area:SetPoint("TOPLEFT", 0, 0)
+    area:SetPoint("BOTTOMRIGHT", 0, 76)
+    planner.planBox = area.box
 
     planner.planSave = ns:Button(tab, "Save", 90, 26, function()
-        local text = box:GetText()
+        local text = planner.planBox:GetText()
         local result = ns:CheckPlan(text)
         if result == true then
             SetPlanText(text)
+            planner.planBox:ClearFocus()
             Refresh()
             planner.planStatus:SetText("Saved")
             planner.planStatus:SetTextColor(Accent())
         else
             planner.planStatus:SetText(result)
-            planner.planStatus:SetTextColor(theme.error[1], theme.error[2], theme.error[3], 1)
+            planner.planStatus:SetTextColor(ErrorColor())
         end
     end, true)
-    planner.planSave:SetPoint("BOTTOMLEFT", 0, 28)
+    planner.planSave:SetPoint("BOTTOMLEFT", 0, 42)
     planner.planStatus = ns:Text(tab, 11, theme.dim)
     planner.planStatus:SetPoint("LEFT", planner.planSave, "RIGHT", 10, 0)
     planner.planStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
     local help = ns:Text(tab, 10, theme.dim)
     help:SetPoint("BOTTOMLEFT", 0, 0)
     help:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
-    help:SetText("Times after the pull (01:25 - Evangelism), after a stage (00:50 p2 - Rewind) and boss abilities (@...).")
+    help:SetHeight(34)
+    help:SetWordWrap(true)
+    help:SetJustifyV("BOTTOM")
+    help:SetText("One line per timing: 01:25 - Evangelism after the pull, 00:50 p2 - Rewind after stage 2 starts, " ..
+        "@Spectral Coils #2 -3 - Power Word: Barrier for boss abilities. Lines starting with -- are notes.")
 end
 
-local function BuildRight()
-    local right = Column(RIGHT_X, RIGHT_W)
+local function BuildNoteTab(panel)
+    local tab = CreateFrame("Frame", nil, panel)
+    tab:SetAllPoints()
+    planner.noteTab = tab
+    local intro = ns:Text(tab, 11, theme.dim)
+    intro:SetPoint("TOPLEFT", 0, 0)
+    intro:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
+    intro:SetWordWrap(true)
+    intro:SetText("Paste an MRT note to take your times from it, or copy this plan out as note lines. Boss ability lines stay in the plan.")
+    local area = ns:TextArea(tab, function(text) UI().note = text end)
+    area:SetPoint("TOPLEFT", 0, -36)
+    area:SetPoint("BOTTOMRIGHT", 0, 76)
+    planner.noteBox = area.box
+    planner.noteImport = ns:ConfirmButton(tab, "Use times from note", "Click again to replace", 170, 26, function()
+        local specKey, diffSlug, boss = Selected()
+        ns:ImportNoteIntoPlan(specKey, diffSlug, boss, planner.noteBox:GetText())
+        Refresh()
+        planner.noteStatus:SetText("The plan's times now come from the note")
+    end)
+    planner.noteImport:SetPoint("BOTTOMLEFT", 0, 42)
+    planner.noteExport = ns:Button(tab, "Copy plan as note", 150, 26, function()
+        local specKey = Selected()
+        local note = ns:PlanToNote(GetPlanText(), specKey)
+        UI().note = note
+        planner.noteBox:SetText(note)
+        planner.noteBox:SetFocus()
+        planner.noteBox:HighlightText()
+        planner.noteStatus:SetText("Press Ctrl+C to copy")
+    end)
+    planner.noteExport:SetPoint("LEFT", planner.noteImport, "RIGHT", 8, 0)
+    planner.noteStatus = ns:Text(tab, 11, theme.dim)
+    planner.noteStatus:SetPoint("BOTTOMLEFT", 0, 14)
+    planner.noteStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
+end
+
+local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "MRT note" } }
+
+local function BuildRight(page)
+    local right = Column(page, RIGHT_X, RIGHT_W)
     planner.tabButtons = {}
-    local tabs = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" } }
     local x = 0
-    for _, info in ipairs(tabs) do
+    for _, info in ipairs(TABS) do
         local button = CreateFrame("Button", nil, right)
-        button:SetSize(110, 24)
+        button:SetSize(100, 24)
         button:SetPoint("TOPLEFT", x, 0)
         button.label = ns:Text(button, 12, theme.text, "LEFT")
         button.label:SetPoint("LEFT", 0, 2)
@@ -616,19 +733,25 @@ local function BuildRight()
         end)
         button.key = info.key
         planner.tabButtons[info.key] = button
-        x = x + 120
+        x = x + 110
     end
     local panel = CreateFrame("Frame", nil, right)
     panel:SetPoint("TOPLEFT", 0, -36)
     panel:SetPoint("BOTTOMRIGHT", 0, 0)
     BuildAssignmentsTab(panel)
     BuildPlanTextTab(panel)
+    BuildNoteTab(panel)
 end
 
 local function RefreshAssignments(ability, keepRows)
     local sameAbility = planner.ability and ability and AbilityKey(planner.ability) == AbilityKey(ability)
     if not keepRows or not sameAbility then
         planner.assignments = ability and ns:GetAbilityAssignments(GetPlanText(), ability) or {}
+        if not sameAbility then
+            local first = planner.assignments[1]
+            planner.testCount:SetValue(tostring(first and first.casts and first.casts[1] or 1))
+            planner.testSeconds:SetValue(tostring(UI().testSeconds or 15))
+        end
     end
     planner.ability = ability
     for _, row in ipairs(planner.assignmentRows) do
@@ -646,7 +769,8 @@ local function RefreshAssignments(ability, keepRows)
     local name, icon = SpellNameAndIcon(ability.spellId, ability.name)
     planner.abilityName:SetText(name)
     planner.abilityIcon:SetTexture(icon)
-    planner.abilityInfo:SetText(ability.spellId and ("Spell id " .. ability.spellId) or "Matched by name")
+    planner.abilityInfo:SetText((ability.group and (ability.group .. "  ·  ") or "") ..
+        (ability.spellId and ("spell id " .. ability.spellId) or "matched by name"))
     planner.addButton:Show()
     if #planner.assignments == 0 then
         planner.empty:SetText("Nothing assigned to " .. name .. " yet. Add a ramp or cooldown to land before it.")
@@ -665,8 +789,8 @@ local function RefreshAssignments(ability, keepRows)
         local text, isError = DescribeAssignment(assignment)
         row.note:SetText(text)
         if isError then
-            row.note:SetTextColor(theme.error[1], theme.error[2], theme.error[3], 1)
-            row.entry.setBorder(theme.error[1], theme.error[2], theme.error[3], 0.8)
+            row.note:SetTextColor(ErrorColor())
+            row.entry.setBorder(ErrorColor(0.8))
         else
             row.note:SetTextColor(1, 1, 1, 0.53)
             row.entry.setBorder(1, 1, 1, 0.22)
@@ -680,81 +804,61 @@ local function RefreshAssignments(ability, keepRows)
     planner.assignmentList:SetContentHeight(-y)
 end
 
---Redraws the window from the saved settings. keepRows keeps the assignment rows of the ability as they are, so rows
+--Redraws the page from the saved settings. keepRows keeps the assignment rows of the ability as they are, so rows
 --that have no ramp or spell yet stay
 function Refresh(keepRows)
     if not planner then
         return
     end
-    local specKey, diffSlug, boss = Selected()
+    local specKey, _, boss = Selected()
     local planText = GetPlanText()
-    planner.specButton.label:SetText(ns.specNames[specKey])
-    for diffId, button in pairs(planner.difficultyButtons) do
-        local selected = diffId == UI().difficulty
-        button.label:SetTextColor(1, 1, 1, selected and 1 or 0.55)
-        if selected then
-            button.label:SetTextColor(Accent())
-        end
-    end
+    planner.specButton:Refresh()
+    planner.difficulty:Refresh()
     for encounterId, row in pairs(planner.bossRows) do
         row:SetSelected(encounterId == boss)
     end
+    RefreshTest()
 
     local abilities = ns:GetPlannerAbilities(boss, planText)
     local selected = SelectedAbility(abilities)
     RefreshAbilities(abilities, selected, planText)
 
-    local tab = UI().plannerTab == 'plan' and 'plan' or 'assignments'
+    local tab = UI().plannerTab
+    if tab ~= 'plan' and tab ~= 'note' then
+        tab = 'assignments'
+    end
     for key, button in pairs(planner.tabButtons) do
         local active = key == tab
         button.label:SetTextColor(1, 1, 1, active and 1 or 0.5)
         button.underline:SetColorTexture(Accent(active and 1 or 0))
     end
+    planner.assignmentsTab:SetShown(tab == 'assignments')
+    planner.planTextTab:SetShown(tab == 'plan')
+    planner.noteTab:SetShown(tab == 'note')
     if tab == 'plan' then
-        planner.assignmentsTab:Hide()
-        planner.planTextTab:Show()
         if not planner.planBox:HasFocus() then
             planner.planBox:SetText(planText)
             planner.planStatus:SetText(ns.specNames[specKey] .. ", " .. ns.difficulties[UI().difficulty].name .. " " .. ns.bosses[boss].name)
             planner.planStatus:SetTextColor(1, 1, 1, 0.53)
         end
+    elseif tab == 'note' then
+        if not planner.noteBox:HasFocus() then
+            planner.noteBox:SetText(UI().note or '')
+        end
     else
-        planner.planTextTab:Hide()
-        planner.assignmentsTab:Show()
         RefreshAssignments(selected, keepRows)
     end
 end
 
-function ns:RefreshPlanner()
+ns:RegisterPage('plans', "Plans", 1, function(page)
+    planner = { page = page }
+    BuildLeft(page)
+    BuildMiddle(page)
+    BuildRight(page)
+    ns:SetPageTestHandler('plans', RefreshTest)
+end, function()
     Refresh()
-end
-
-function ns:OpenPlanner()
-    if not planner then
-        CreateWindow()
-        BuildLeft()
-        BuildMiddle()
-        BuildRight()
-    end
-    local frame = planner.frame
-    local point = UI().plannerPoint
-    frame:ClearAllPoints()
-    if point then
-        frame:SetPoint(point[1], UIParent, point[2], point[3], point[4])
-    else
-        frame:SetPoint("CENTER")
-    end
-    frame:Show()
-    Refresh()
-end
-
-function ns:TogglePlanner()
-    if planner and planner.frame:IsShown() then
-        planner.frame:Hide()
-    else
-        ns:OpenPlanner()
-    end
-end
+end)
 
 --For tests
 function ns:GetPlannerWidgets()

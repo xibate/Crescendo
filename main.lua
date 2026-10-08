@@ -1,42 +1,34 @@
 local _, ns = ...
 
---Starts the reminders when a raid boss in the boss list is pulled, or when combat starts in testing mode
-local function OnFightStart(event, encounterId, encounterName, difficultyId)
-    local isRaidBoss = event == "ENCOUNTER_START" and ns.difficulties[difficultyId] ~= nil
-    if isRaidBoss and not ns.bosses[encounterId] then
-        ns:WriteOutput('No plan for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Bosses.lua to use the addon on this boss')
+--Starts the reminders when a raid boss in the boss list is pulled
+local function OnEncounterStart(encounterId, encounterName, difficultyId)
+    if not ns.difficulties[difficultyId] then
         return
     end
-    local isTest = event == "PLAYER_REGEN_DISABLED" and ns.db.testing.testMode
-    if not isRaidBoss and not isTest then
+    if not ns.bosses[encounterId] then
+        ns:WriteOutput('No plan for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Bosses.lua to use the addon on this boss')
         return
     end
     local specKey = ns:GetPlayerSpecKey()
     if not specKey then
         return
     end
-    if isTest then
-        ns:BuildFightPlan(specKey, ns:GetTestPlan(specKey), false)
-    else
-        ns:BuildFightPlan(specKey, ns:GetPlan(specKey, ns.difficulties[difficultyId].slug, encounterId), true, encounterId)
-    end
+    local diffSlug = ns.difficulties[difficultyId].slug
+    ns:BuildFightPlan(specKey, ns:GetPlan(specKey, diffSlug, encounterId), true, encounterId)
     ns:ResetAbilityTimings()
-    ns:StartFight(specKey, not isTest and encounterId or nil)
+    ns:StartFight(specKey, encounterId)
+    ns:StartRecording(encounterId, diffSlug)
     ns:ReplayEarlyBossModEvents()
 end
 
-local fightStart = CreateFrame("Frame")
-fightStart:RegisterEvent("ENCOUNTER_START")
-fightStart:RegisterEvent("PLAYER_REGEN_DISABLED")
-fightStart:SetScript("OnEvent", function(_, event, ...)
-    OnFightStart(event, ...)
-end)
-
-local fightEnd = CreateFrame("Frame")
-fightEnd:RegisterEvent("ENCOUNTER_END")
-fightEnd:RegisterEvent("PLAYER_REGEN_ENABLED")
-fightEnd:SetScript("OnEvent", function(_, event)
-    if event == "ENCOUNTER_END" or ns.db.testing.testMode then
+local encounter = CreateFrame("Frame")
+encounter:RegisterEvent("ENCOUNTER_START")
+encounter:RegisterEvent("ENCOUNTER_END")
+encounter:SetScript("OnEvent", function(_, event, ...)
+    if event == "ENCOUNTER_START" then
+        OnEncounterStart(...)
+    elseif ns.fight.running and not ns.fight.test then
+        ns:StopRecording()
         ns:StopFight()
     end
 end)
@@ -51,5 +43,14 @@ readableValues:SetScript("OnEvent", function()
     local specKey = ns:GetPlayerSpecKey()
     if specKey and ns.db then
         ns:UpdateRechargeTimes(specKey)
+    end
+end)
+
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:SetScript("OnEvent", function(_, _, addonName)
+    if addonName == "ZynxRampHelper" then
+        ns:InitDatabase()
+        ns:SetUpCommands()
     end
 end)

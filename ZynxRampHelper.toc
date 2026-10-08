@@ -1,16 +1,12 @@
 ## Interface: 120100, 120105
-## Version: 2.0.0
+## Version: 2.1.0
 ## Title: Zynx Ramp Helper
 ## IconTexture: Interface/Addons/ZynxRampHelper/Media/logo
 ## Notes: Automatic reminder creator for ramp healers in raid
 ## Author: Zynx
 ## SavedVariables: ZynxRampHelperDB
-## OptionalDeps: BigWigs, DBM-Core
-
-libs\LibStub.lua
-libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
-libs\AceGUI-3.0\AceGUI-3.0.xml
-libs\AceConfig-3.0\AceConfig-3.0.xml
+## OptionalDeps: BigWigs, DBM-Core, EllesmereUI
+## AddonCompartmentFunc: ZynxRampHelper_OnAddonCompartmentClick
 
 Config\Bosses.lua
 Config\Specs.lua
@@ -24,10 +20,13 @@ Core\PlanText.lua
 Core\Plan.lua
 Core\Fight.lua
 Core\BossMods.lua
+Core\Test.lua
 
 UI\Display.lua
 UI\Theme.lua
+UI\Window.lua
 UI\Planner.lua
-UI\Options.lua
+UI\RampsPage.lua
+UI\DisplayPage.lua
 
 main.lua

@@ -51,6 +51,7 @@ function ns:StartPhaseFromBossMod(stage)
         return
     end
     if ns.fight.phase ~= ns:PhaseKey(stage) then
+        ns:RecordBossModEvent({ kind = 'stage', stage = tonumber(stage) })
         ns:StartPhase(stage)
     end
 end
@@ -64,7 +65,7 @@ local function SplitBarText(text)
     return text, nil
 end
 
---Remembers the abilities the boss mods showed bars for, so the options can list them for that boss
+--Remembers the abilities the boss mods showed bars for, so the planner can list them for that boss
 local function RememberAbility(name, spellId)
     local encounterId = ns.fight.encounterId
     if encounterId then
@@ -151,6 +152,7 @@ function ns:OnBossModBar(source, barKey, text, duration, spellId, count)
     local name, barCount = SplitBarText(text)
     spellId = tonumber(spellId)
     RememberAbility(name, spellId)
+    ns:RecordBossModEvent({ kind = 'bar', source = source, key = barKey, text = text, duration = tonumber(duration), spellId = spellId, count = tonumber(count) })
     --With both BigWigs and DBM installed only one is followed, otherwise every reminder shows twice
     if barSource and barSource ~= source then
         return
@@ -173,6 +175,7 @@ function ns:OnBossModBarUpdate(source, barKey, remaining)
         end)
         return
     end
+    ns:RecordBossModEvent({ kind = 'update', source = source, key = barKey, duration = tonumber(remaining) })
     local barId = source .. ':' .. tostring(barKey)
     if abilityTimings[barId] then
         ScheduleAbilityTiming(barId, abilityTimings[barId].anchors, GetTime() + tonumber(remaining))
@@ -190,6 +193,7 @@ function ns:OnBossModBarStop(source, barKey)
         end)
         return
     end
+    ns:RecordBossModEvent({ kind = 'stop', source = source, key = barKey })
     local barId = source .. ':' .. tostring(barKey)
     local timing = abilityTimings[barId]
     if timing and timing.landsAt - GetTime() > 1 then
@@ -208,19 +212,6 @@ function ns:ShowDueAbilityReminders(now)
             end
         end
     end
-end
-
---The abilities BigWigs or DBM showed bars for on a boss, for the Plan tab
-function ns:GetSeenAbilitiesText(encounterId)
-    local names = {}
-    for name, spellId in pairs(ns.db.seenAbilities[encounterId] or {}) do
-        table.insert(names, type(spellId) == 'number' and (name .. ' (' .. spellId .. ')') or name)
-    end
-    if #names == 0 then
-        return "None yet. Pull this boss with BigWigs or DBM and the abilities they show bars for are listed here, to use in @ lines."
-    end
-    table.sort(names)
-    return table.concat(names, '\n')
 end
 
 local bossModHooks = CreateFrame("Frame")

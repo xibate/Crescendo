@@ -28,7 +28,7 @@ for _, spec in pairs(ns.specs) do
     ns.specNames[spec.key] = spec.name
 end
 
---Ramps each spec starts with. They are copied into the saved settings and can be changed on the Ramps tab.
+--Ramps each spec starts with. They are copied into the saved settings and can be changed on the Ramps page.
 --spellId is the spell MRT notes use for the ramp. Steps are written in the ramp format, see Core/Ramps.lua.
 --Sequences follow the Midnight 12.1 healing guides: the ramp lands when the damage does
 ns.starterRamps = {

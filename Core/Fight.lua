@@ -1,7 +1,7 @@
 local _, ns = ...
 
---State of the current fight: running, specKey, encounterId (nil in test mode), start time, and the phase key and
---start time of the current phase
+--State of the current fight: running, specKey, encounterId (nil in a test), start time, the phase key and start time of
+--the current phase, and for a test what it tests (see Core/Test.lua)
 ns.fight = { running = false }
 
 function ns:StartFight(specKey, encounterId)
@@ -18,10 +18,17 @@ function ns:StartFight(specKey, encounterId)
 end
 
 function ns:StopFight()
-    if ns.fight.ticker then
-        ns.fight.ticker:Cancel()
+    local fight = ns.fight
+    if fight.ticker then
+        fight.ticker:Cancel()
     end
     ns.fight = { running = false }
+    if fight.test then
+        for _, timer in ipairs(fight.test.timers) do
+            timer:Cancel()
+        end
+        ns:OnTestChanged()
+    end
 end
 
 --A boss mod reported a stage, or it was started by hand. Its reminders are timed from now, and run again when the boss
