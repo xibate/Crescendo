@@ -17,7 +17,9 @@ function ns:StopTimer()
         ns.mainTimerData.runningTimer:Cancel()
         ns.mainTimerData.timerRunning = false
     end
-    ns.phaseEventsTrigger:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+    if ns.combatLogAvailable then
+        ns.phaseEventsTrigger:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+    end
     if ns.phaseTimerData.timerRunning and ns.phaseTimerData.runningTimer ~= nil then
         ns.phaseTimerData.runningTimer:Cancel()
         ns.phaseTimerData.timerRunning = false
@@ -37,6 +39,15 @@ function ns:StartPhase(phase)
         ns.phaseTimerData.currentTimer = GetTime() - ns.phaseTimerData.startTime
         ns:RunAssignmentCheck(ns.phaseTimerData.currentTimer, phase)
     end)
+end
+
+--Starts a phase from the /hrh phase <number> command, meant to be put in a macro since phases can't be detected automatically since Midnight
+function ns:StartPhaseManually(phase)
+    if not ns.mainTimerData.timerRunning then
+        ns:WriteOutput('Phase ' .. phase .. ' can only be started during an encounter')
+        return
+    end
+    ns:StartPhase(phase)
 end
 
 --Called with a specific time and a phase, it checks for assignments for that phase at that time and if they haven't been ran before, runs them

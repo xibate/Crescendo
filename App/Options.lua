@@ -1,6 +1,6 @@
 --Namespace
 local _, ns = ...
-local version = "2.0.3"
+local version = "2.0.3-midnight"
 local defaultOptions = {
     ['testing'] = {
         ['testMode'] = false
@@ -408,6 +408,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             "when that boss is pulled.\n\nTo change the size or style of the reminders head to the Options menu, to test the addon on a dummy head to the Testing menu and " ..
                             "turn on Testing Mode, which will pull from the test timers for your spec when you start combat.\n\nThere are also settings in the options to automatically grab " ..
                             "your assigned timers from your currently active MRT note, if you prefer to do that instead of writing your own timings in the addon " ..
+                            "\n\nSince Midnight addons can't detect boss phases anymore. Timings written as '00:50, p2' only start counting once you type " ..
+                            "'/hrh phase 2', so put that command in a macro and press it when the phase starts." ..
                             "\n\nIf you have any comment or question, feel free to let me know in any of the places listed below, and thank you for using the addon." ..
                             "\n\n-Harrek\n\nAddon Version: " .. version .. "\n\n",
                             order = 1,
@@ -703,7 +705,7 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     for fightId, fightData in pairs(ns.bosses) do
                                         for diffId, diffData in pairs(ns.difficulties) do
                                             local diffSlug = diffData.slug
-                                            local importText = ns[specName]['defaultAssignments'][fightId]['assignments'][diffSlug]
+                                            local importText = ns:GetDefaultAssignments(specName, fightId, diffSlug)
                                             if importText ~= "" then
                                                 importedBossList = importedBossList .. ' - ' .. diffData.name .. ' ' .. fightData.name .. '\n'
                                                 local timers = ns:ConvertNoteToTable(importText, specName, fightId, diffSlug)
@@ -1001,7 +1003,12 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
         SLASH_HARREKSRAMPHELPER1 = "/hrh"
 
         SlashCmdList.HARREKSRAMPHELPER = function(msg, editBox)
-            Settings.OpenToCategory(optionsFrame.name)
+            local phase = msg:match("^%s*phase%s+(%d+)")
+            if phase then
+                ns:StartPhaseManually(phase)
+            else
+                Settings.OpenToCategory(optionsFrame.name)
+            end
         end
     elseif event == "PLAYER_LOGOUT" then
     end

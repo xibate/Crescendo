@@ -8,6 +8,18 @@
 [Wago Addon Page](https://addons.wago.io/addons/harreks-healer-ramp-helper)
 
 <h2>
+  Midnight update (unofficial)
+</h2>
+
+This copy is updated to load and run on Midnight (patch 12.1, The Venomous Abyss). It is not an official release by Harrek.
+
+- The boss list in [Config/Data.lua](Config/Data.lua) is now The Venomous Abyss. Encounter ids for the Season 1 raids are listed in a comment there. When you pull a boss that isn't set up, the addon prints its encounter id in chat.
+- Addons can't read the combat log anymore, so boss phases are no longer detected. Write phase timings as `00:50, p2` (or `{time:00:50,p2}` in an MRT note) and start the phase with `/hrh phase 2`, ideally from a macro on a key.
+- Spell charges and haste can be hidden from addons during encounters. When charges can't be read, "Save Radiance"/"Save Engulfs" reminders assume both charges are spent and show early. Haste uses the last value read outside the encounter.
+- Text to speech uses the new `C_VoiceChat.SpeakText` arguments, and spec and talent checks use `C_SpecializationInfo` and `C_SpellBook`.
+- The built-in Preservation default plans are for Manaforge Omega bosses and won't show for the new raid.
+
+<h2>
   How does it work
 </h2>
 

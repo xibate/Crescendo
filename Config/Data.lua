@@ -11,109 +11,67 @@ ns.specs = {
 }
 
 --https://wago.tools/db2/DungeonEncounter
+--The Venomous Abyss (Midnight Season 2). Encounter ids taken from BigWigs
+--Phase triggers used combat log events, which addons can't read since Midnight, so phases are left empty
+--and started by hand with /hrh phase <number> instead
+--Midnight Season 1 raids, add them here to use the addon there: Imperator Averzian 3176, Vorasius 3177,
+--Vaelgor & Ezzorak 3178, Fallen-King Salhadaar 3179, Lightblinded Vanguard 3180, Crown of the Cosmos 3181,
+--Belo'ren, Child of Al'ar 3182, Midnight Falls 3183, Chimaerus the Undreamt God 3306
 ns.bosses = {
-    [3129] = {
-        name = "Plexus Sentinel",
-        phases = {
-            ["myth"] = {
-                [1] = "SAR:1223364:1",
-                [2] = "SAA:1223364:2",
-                [3] = "SAR:1223364:2",
-                [4] = "SAA:1223364:3",
-                [5] = "SAR:1223364:3",
-                [6] = "SAA:1223364:4",
-            },
-            ["hero"] = {
-                [1] = "SAR:1223364:1",
-                [2] = "SAA:1223364:2",
-                [3] = "SAR:1223364:2",
-                [4] = "SAA:1223364:3",
-                [5] = "SAR:1223364:3",
-                [6] = "SAA:1223364:4",
-            }
-        }
-    },
-    [3131] = {
-        name = "Loomithar",
-        phases = {
-            ["myth"] = {
-                [1] = "SAA:1228070:1",
-            },
-            ["hero"] = {
-                [1] = "SAA:1228070:1",
-            }
-        }
-    },
-    [3130] = {
-        name = "Soulbinder Naazindhri",
+    [3420] = {
+        name = "Sszorak",
         phases = {
             ["myth"] = {},
             ["hero"] = {}
         }
     },
-    [3132] = {
-        name = "Forgeweaver Araz",
-        phases = {
-            ["myth"] = {
-                [1] = "SCS:1230529:1",
-                [2] = "SCS:1230529:2",
-            },
-            ["hero"] = {
-                [1] = "SCS:1230529:1",
-                [2] = "SCS:1230529:2",
-            }
-        }
-    },
-    [3122] = {
-        name = "The Soul Hunters",
-        phases = {
-            ["myth"] = {
-                [1] = "SAR:1245978:1",
-                [2] = "SAR:1245978:3",
-                [3] = "SAR:1245978:5"
-            },
-            ["hero"] = {
-                [1] = "SAR:1242133:1",
-                [2] = "SAR:1242133:3",
-                [3] = "SAR:1242133:5"
-            }
-        }
-    },
-    [3133] = {
-        name = "Fractillus",
+    [3421] = {
+        name = "The Twin Fangs",
         phases = {
             ["myth"] = {},
             ["hero"] = {}
         }
     },
-    [3134] = {
-        name = "Nexus King Salhadaar",
+    [3429] = {
+        name = "The Coiled Altar",
         phases = {
-            ["myth"] = {
-                [1] = "SAR:1228265:1"
-            },
-            ["hero"] = {
-                [1] = "SAR:1228265:1"
-            }
+            ["myth"] = {},
+            ["hero"] = {}
         }
     },
-    [3135] = {
-        name = "Dimensius the All-Devouring",
+    [3445] = {
+        name = "Entombed Sentinels",
         phases = {
-            ["myth"] = {
-                [1] = "SAR:1228367:1",
-                [2] = "SAA:1246143:1",
-                [3] = "SAR:1246143:1",
-                [4] = "SAA:1246143:2",
-                [5] = "SAA:1245292:1"
-            },
-            ["hero"] = {
-                [1] = "SAR:1228367:1",
-                [2] = "SAA:1246143:1",
-                [3] = "SAR:1246143:1",
-                [4] = "SAA:1246143:2",
-                [5] = "SAA:1245292:1"
-            }
+            ["myth"] = {},
+            ["hero"] = {}
+        }
+    },
+    [3455] = {
+        name = "Vashnik the Malignant",
+        phases = {
+            ["myth"] = {},
+            ["hero"] = {}
+        }
+    },
+    [3470] = {
+        name = "Nek'zali the Soulcoiler",
+        phases = {
+            ["myth"] = {},
+            ["hero"] = {}
+        }
+    },
+    [3492] = {
+        name = "Ula'tek",
+        phases = {
+            ["myth"] = {},
+            ["hero"] = {}
+        }
+    },
+    [3497] = {
+        name = "The Lost Explorers",
+        phases = {
+            ["myth"] = {},
+            ["hero"] = {}
         }
     }
 }

@@ -93,7 +93,8 @@ end
 --Sends a TTS message with some predefined parameters
 function ns:SendTts(text)
     if HarreksRampHelperDB.options.ttsEnabled then
-        C_VoiceChat.SpeakText(HarreksRampHelperDB.options.ttsVoice, text, Enum.VoiceTtsDestination.LocalPlayback, HarreksRampHelperDB.options.ttsRate, HarreksRampHelperDB.options.ttsVolume)
+        --The destination argument was removed from SpeakText, the enum it used no longer exists
+        C_VoiceChat.SpeakText(HarreksRampHelperDB.options.ttsVoice, text, HarreksRampHelperDB.options.ttsRate, HarreksRampHelperDB.options.ttsVolume)
     end
 end
 

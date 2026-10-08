@@ -6,6 +6,11 @@ function ns:CutDecimals(time)
     return tonumber(string.format('%.0f', time))
 end
 
+--Since Midnight some values are "secret" during encounters, addons can pass them along but can't do math or comparisons with them
+function ns:IsSecret(value)
+    return issecretvalue ~= nil and issecretvalue(value)
+end
+
 --Convert a string of times separated by new lines into a table. If the time has phases marked by 'p#' then they go into a table indexed by the phase number, otherwise they go into main
 function ns:ConvertTimesToTable(timeString)
     local timesTable = {
@@ -16,8 +21,9 @@ function ns:ConvertTimesToTable(timeString)
             local phase = nil
             if time:find(',') then
                 for val in time:gmatch("([^,]+)") do
-                    if val:find('p') then
-                        phase = val:gsub(' p', '')
+                    local phaseNumber = val:match('p%s*(%d+)')
+                    if phaseNumber then
+                        phase = phaseNumber
                     else
                         time = val
                     end
@@ -65,20 +71,26 @@ function ns:ConvertNoteToTable(noteString, spec, fightId, diffSlug)
                                 track = nil
                             }
                             for val in time:gmatch("([^,]+)") do
-                                if val:find('S') then
+                                local phaseNumber = val:match('^%s*p(%d+)%s*$')
+                                if phaseNumber then
+                                    --Phase written as p2, these phases are started by hand with /hrh phase 2
+                                    values.phase = ' p' .. phaseNumber
+                                elseif val:find('S') then
                                     values.track = val
                                 else
                                     values.time = val
                                 end
                             end
-                            for phase, identifier in pairs(ns.bosses[fightId].phases[diffSlug]) do
-                                if values.track == identifier then
-                                    values.phase = ' p' .. phase
-                                    break
+                            if values.track then
+                                for phase, identifier in pairs(ns.bosses[fightId].phases[diffSlug]) do
+                                    if values.track == identifier then
+                                        values.phase = ' p' .. phase
+                                        break
+                                    end
                                 end
                             end
-                            if values.phase then
-                                time = time:gsub(values.track, values.phase)
+                            if values.phase and values.time then
+                                time = values.time .. ',' .. values.phase
                             else
                                 lineError = true
                             end

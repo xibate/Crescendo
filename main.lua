@@ -22,6 +22,8 @@ ns.specName = nil
 ns.specSupported = false
 ns.fightAssignments = {}
 ns.frames = {}
+--Midnight (12.0) removed the combat log from addons, registering for it gets the addon blocked
+ns.combatLogAvailable = select(4, GetBuildInfo()) < 120000
 --Timer Frames
 ns.phaseEventsTrigger = CreateFrame("Frame") --Frame that handles phase changing
 ns.phaseEventsTrigger:SetScript("OnEvent", function()
@@ -43,7 +45,10 @@ end)
 local startTimer = CreateFrame("Frame") --The frame that runs the functions on encounter start
 startTimer:RegisterEvent("PLAYER_REGEN_DISABLED")
 startTimer:RegisterEvent("ENCOUNTER_START")
-startTimer:SetScript("OnEvent", function(_, event, encounterId, _, difficultyId)
+startTimer:SetScript("OnEvent", function(_, event, encounterId, encounterName, difficultyId)
+    if event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and not ns.bosses[encounterId] then
+        ns:WriteOutput('No timings for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Data.lua to use the addon on this boss')
+    end
     if (event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and ns.bosses[encounterId]) or (event == "PLAYER_REGEN_DISABLED" and HarreksRampHelperDB.testing.testMode) then
         ns:SetPlayerSpec()
         if ns.specSupported then
@@ -64,4 +69,11 @@ stopTimer:SetScript("OnEvent", function(_, event)
     if event == "ENCOUNTER_END" or (event == "PLAYER_REGEN_ENABLED" and HarreksRampHelperDB.testing.testMode) then
         ns:StopTimer()
     end
+end)
+
+local hasteTracker = CreateFrame("Frame") --Keeps the last readable haste value, since it can be secret during encounters
+hasteTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
+hasteTracker:RegisterUnitEvent("UNIT_SPELL_HASTE", "player")
+hasteTracker:SetScript("OnEvent", function()
+    ns:GetPlayerHaste()
 end)
