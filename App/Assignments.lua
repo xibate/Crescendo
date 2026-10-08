@@ -59,6 +59,9 @@ function ns:SetupTimings(event, encounterId, difficultyId)
     --ns:ResetDisplay() REPLACE THIS WITH A HIDE DISPLAYS IF YOU GO INTO COMBAT
     --Init fight assignments Table
     ns.fightAssignments = {}
+    ns.abilityAnchors = {}
+    ns.abilityTimings = {}
+    ns.barSource = nil
     local rampTypesTable = ns[ns.specName]['rampTypes']()
     local cooldownsTable = ns[ns.specName]['cooldowns']
     local utilitiesTable = ns[ns.specName]['utilities']
@@ -124,16 +127,24 @@ function ns:SetupTimings(event, encounterId, difficultyId)
         end
     end
     for type, _ in pairs(assignmentsTable) do
-        local fightTimings
+        local fightTimings, savedTimings
         if event == "ENCOUNTER_START" then
+            local difficultySlug = ns.difficulties[difficultyId]['slug']
+            savedTimings = HarreksRampHelperDB[ns.specName][difficultySlug][tostring(encounterId)][type]
             if HarreksRampHelperDB.options.readFromNote then
                 fightTimings = noteAssignments[type]
             else
-                local difficultySlug = ns.difficulties[difficultyId]['slug']
-                fightTimings =  HarreksRampHelperDB[ns.specName][difficultySlug][tostring(encounterId)][type]
+                fightTimings = savedTimings
             end
         elseif HarreksRampHelperDB.testing.testMode then
-            fightTimings = HarreksRampHelperDB[ns.specName].testTimers[type]
+            savedTimings = HarreksRampHelperDB[ns.specName].testTimers[type]
+            fightTimings = savedTimings
+        end
+        --Lines like '@Spectral Coils #2' are tied to a boss ability bar instead of a time, see BossMods.lua. These
+        --always come from the addon's own timings, also when the times are read from the MRT note
+        for _, anchor in pairs(ns:ParseAbilityAnchors(savedTimings)) do
+            anchor['type'] = type
+            table.insert(ns.abilityAnchors, anchor)
         end
         fightTimings = ns:ConvertTimesToTable(fightTimings)
         for index, phaseTimings in pairs(fightTimings) do
@@ -146,69 +157,72 @@ function ns:SetupTimings(event, encounterId, difficultyId)
             for _, timing in pairs(phaseTimings) do
                 for _, assignment in pairs(assignmentsTable[type]) do
                     local assignmentTime = ns:CutDecimals(timing - assignment['offset'])
-                    if assignmentTime >= 0 and (not HarreksRampHelperDB.options.preReqsOnly or (HarreksRampHelperDB.options.preReqsOnly and assignment['preRequisite'])) then
-                        if assignment['dynamic'] then
-                            if not ns.fightAssignments[index]['dynamic'][assignmentTime] then
-                                ns.fightAssignments[index]['dynamic'][assignmentTime] = {}
-                            end
-                            table.insert(ns.fightAssignments[index]['dynamic'][assignmentTime], {
-                                ['text'] = assignment['text'],
-                                ['icon'] = assignment['icon'],
-                                ['loaded'] = false,
-                                ['spellId'] = assignment['spellId'],
-                                ['tts'] = assignment['tts'] or nil
-                            })
-                        else
-                            if not ns.fightAssignments[index]['static'][assignmentTime] then
-                                ns.fightAssignments[index]['static'][assignmentTime] = {}
-                            end
-                            table.insert(ns.fightAssignments[index]['static'][assignmentTime], {
-                                ['text'] = assignment['text'],
-                                ['icon'] = assignment['icon'],
-                                ['loaded'] = false,
-                                ['showTimer'] = assignment['showTimer'],
-                                ['tts'] = assignment['tts'] or nil
-                            })
+                    if assignmentTime >= 0 and ns:ShouldUseAssignment(assignment) then
+                        local kind = assignment['dynamic'] and 'dynamic' or 'static'
+                        if not ns.fightAssignments[index][kind][assignmentTime] then
+                            ns.fightAssignments[index][kind][assignmentTime] = {}
                         end
+                        table.insert(ns.fightAssignments[index][kind][assignmentTime], ns:CreateAssignment(assignment))
                     end
                 end
             end
         end
     end
+    ns.assignmentsTable = assignmentsTable
+end
+
+--In prerequisites only mode the final cooldown press of a ramp is left out
+function ns:ShouldUseAssignment(assignment)
+    return not HarreksRampHelperDB.options.preReqsOnly or assignment['preRequisite']
+end
+
+--Copies one step of a ramp into an assignment that can be shown during the fight
+function ns:CreateAssignment(assignment)
+    return {
+        ['text'] = assignment['text'],
+        ['icon'] = assignment['icon'],
+        ['loaded'] = false,
+        ['dynamic'] = assignment['dynamic'],
+        ['spellId'] = assignment['spellId'],
+        ['showTimer'] = assignment['showTimer'],
+        ['tts'] = assignment['tts'] or nil
+    }
 end
 
 --The time to show a dynamic assignment depends on how you are using the charges, this compares the potential cooldown of the spell with the remaining time before the assignment to see if it should be shown
 function ns:ComputeDynamicAssignments(currentTime, phase)
     for time, assignmentSet in pairs(ns.fightAssignments[tostring(phase)]['dynamic']) do
         for index, assignment in pairs(assignmentSet) do
-            if time >= currentTime and not assignment['loaded'] then
-                local timeLeft = time - currentTime
-                local spellInfo = C_Spell.GetSpellCharges(assignment['spellId'])
-                local timeUntilFullCharges
-                if not spellInfo or ns:IsSecret(spellInfo.currentCharges) or ns:IsSecret(spellInfo.cooldownStartTime) or ns:IsSecret(spellInfo.cooldownDuration) then
-                    --Charges can't be read during the encounter, assume both are spent so the reminder shows early rather than late
-                    timeUntilFullCharges = 2 * ns:GetRealCooldown(ns.specName, assignment['spellId'])
-                else
-                    local spellCd
-                    if spellInfo.currentCharges < 2 then
-                        spellCd = spellInfo.cooldownStartTime + spellInfo.cooldownDuration - GetTime()
-                    else
-                        spellCd = 0
-                    end
-                    timeUntilFullCharges = spellInfo.cooldownDuration
-                    if spellInfo.currentCharges == 1 then
-                        timeUntilFullCharges = timeUntilFullCharges + spellCd
-                    elseif spellInfo.currentCharges == 0 then
-                        timeUntilFullCharges = timeUntilFullCharges + spellCd + spellInfo.cooldownDuration
-                    end
-                end
-                if timeUntilFullCharges >= timeLeft then
-                    ns:ShowAssignment(assignment)
-                    ns.fightAssignments[tostring(phase)]['dynamic'][time][index]['loaded'] = true
-                end
+            if time >= currentTime and not assignment['loaded'] and ns:ShouldShowDynamic(assignment, time - currentTime) then
+                ns:ShowAssignment(assignment)
+                ns.fightAssignments[tostring(phase)]['dynamic'][time][index]['loaded'] = true
             end
         end
     end
+end
+
+--A dynamic assignment shows once the charges of its spell would need all the time that is left to come back
+function ns:ShouldShowDynamic(assignment, timeLeft)
+    local spellInfo = C_Spell.GetSpellCharges(assignment['spellId'])
+    local timeUntilFullCharges
+    if not spellInfo or ns:IsSecret(spellInfo.currentCharges) or ns:IsSecret(spellInfo.cooldownStartTime) or ns:IsSecret(spellInfo.cooldownDuration) then
+        --Charges can't be read during the encounter, assume both are spent so the reminder shows early rather than late
+        timeUntilFullCharges = 2 * ns:GetRealCooldown(ns.specName, assignment['spellId'])
+    else
+        local spellCd
+        if spellInfo.currentCharges < 2 then
+            spellCd = spellInfo.cooldownStartTime + spellInfo.cooldownDuration - GetTime()
+        else
+            spellCd = 0
+        end
+        timeUntilFullCharges = spellInfo.cooldownDuration
+        if spellInfo.currentCharges == 1 then
+            timeUntilFullCharges = timeUntilFullCharges + spellCd
+        elseif spellInfo.currentCharges == 0 then
+            timeUntilFullCharges = timeUntilFullCharges + spellCd + spellInfo.cooldownDuration
+        end
+    end
+    return timeUntilFullCharges >= timeLeft
 end
 
 --Gets either the actual cooldown or the base cooldown of a spell depending on if haste as been computed
@@ -240,8 +254,8 @@ function ns:ImportNote(specName)
     if fightId and diffId and importText then
         local diffSlug = ns.difficulties[diffId].slug
         local timers = ns:ConvertNoteToTable(importText, specName, fightId, diffSlug)
-        for type, _ in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
-            HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ''
+        for type, timings in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
+            HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
         end
         local spellList = ns:GetFullSpellList(specName)
         for spell, timings in pairs(timers) do
@@ -251,7 +265,7 @@ function ns:ImportNote(specName)
                 for _, time in pairs(timings) do
                     timingsString = timingsString .. time .. '\n'
                 end
-                HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] = timingsString
+                HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] = (HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] or '') .. timingsString
             end
         end
         HarreksRampHelperDB.import.importText = '';

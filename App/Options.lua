@@ -29,7 +29,9 @@ local defaultOptions = {
         ['fight'] = nil,
         ['difficulty'] = nil,
         ['importText'] = nil
-    }
+    },
+    --Boss abilities BigWigs or DBM showed bars for, per encounter id
+    ['seenAbilities'] = {}
 }
 
 local addonLoader = CreateFrame("Frame")
@@ -410,6 +412,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             "your assigned timers from your currently active MRT note, if you prefer to do that instead of writing your own timings in the addon " ..
                             "\n\nSince Midnight phases come from BigWigs or DBM: timings written as '00:50, p2' start counting when your boss mod shows stage 2 " ..
                             "(intermissions are stages like p1.5). Without a boss mod you can start a phase yourself with '/hrh phase 2' from a macro." ..
+                            "\n\nA timings line can also follow a boss ability instead of a time, like '@Spectral Coils #2' for the second cast. " ..
+                            "The Boss Abilities tab of each boss explains how and lists the abilities your boss mod showed on that boss." ..
                             "\n\nIf you have any comment or question, feel free to let me know in any of the places listed below, and thank you for using the addon." ..
                             "\n\n-Harrek\n\nAddon Version: " .. version .. "\n\n",
                             order = 1,
@@ -709,8 +713,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                             if importText ~= "" then
                                                 importedBossList = importedBossList .. ' - ' .. diffData.name .. ' ' .. fightData.name .. '\n'
                                                 local timers = ns:ConvertNoteToTable(importText, specName, fightId, diffSlug)
-                                                for type, _ in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
-                                                    HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ''
+                                                for type, timings in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
+                                                    HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
                                                 end
                                                 for spell, timings in pairs(timers) do
                                                     local rampType = ns[specName]['cooldowns'][tonumber(spell)]
@@ -719,7 +723,7 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                                         for _, time in pairs(timings) do
                                                             timingsString = timingsString .. time .. '\n'
                                                         end
-                                                        HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] = timingsString
+                                                        HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] = (HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] or '') .. timingsString
                                                     end
                                                 end
                                                 HarreksRampHelperDB.import.importText = '';
@@ -779,11 +783,11 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] = val end,
                             get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] end,
                             validate = function(_, val)
-                                local valid = not string.find(val, "[{}SCAR]")
+                                local valid = ns:IsValidTimingsText(val)
                                 if valid then
                                     return true
                                 else
-                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n\nIf your input contains parts like this:\n\n" ..
+                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n@Spectral Coils #2\n\nIf your input contains parts like this:\n\n" ..
                                     "{time:00:25,SCC:468794:1}\n\nThen it is in MRT Note format, and you should import it instead."
                                 end
                             end
@@ -833,11 +837,11 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] = val end,
                             get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] end,
                             validate = function(_, val)
-                                local valid = not string.find(val, "[{}SCAR]")
+                                local valid = ns:IsValidTimingsText(val)
                                 if valid then
                                     return true
                                 else
-                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n\nIf your input contains parts like this:\n\n" ..
+                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n@Spectral Coils #2\n\nIf your input contains parts like this:\n\n" ..
                                     "{time:00:25,SCC:468794:1}\n\nThen it is in MRT Note format, and you should import it instead."
                                 end
                             end
@@ -887,11 +891,11 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] = val end,
                             get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] end,
                             validate = function(_, val)
-                                local valid = not string.find(val, "[{}SCAR]")
+                                local valid = ns:IsValidTimingsText(val)
                                 if valid then
                                     return true
                                 else
-                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n\nIf your input contains parts like this:\n\n" ..
+                                    return "Your input contains an invalid character. Your times are supposed to look like this:\n\n01:25\n00:50, p2\n@Spectral Coils #2\n\nIf your input contains parts like this:\n\n" ..
                                     "{time:00:25,SCC:468794:1}\n\nThen it is in MRT Note format, and you should import it instead."
                                 end
                             end
@@ -985,6 +989,18 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 name = "Utility",
                                 order = 3,
                                 args = utilityOptions
+                            },
+                            abilities = {
+                                type = "group",
+                                name = "Boss Abilities",
+                                order = 4,
+                                args = {
+                                    desc = {
+                                        type = "description",
+                                        fontSize = "medium",
+                                        name = function() return ns:GetAbilityHelpText(encounterId) end
+                                    }
+                                }
                             }
                         }
                     }

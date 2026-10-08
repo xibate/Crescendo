@@ -8,6 +8,7 @@ function ns:StartTimer()
     ns.mainTimerData.runningTimer = C_Timer.NewTicker(0.5, function()
         ns.mainTimerData.currentTimer = GetTime() - ns.mainTimerData.startTime
         ns:RunAssignmentCheck(ns.mainTimerData.currentTimer, 'main')
+        ns:RunAbilityTimings()
     end)
 end
 
@@ -60,17 +61,6 @@ function ns:StartPhaseManually(phase)
         return
     end
     ns:StartPhase(phase)
-end
-
---Starts a phase when BigWigs or DBM report a stage change. Both can be installed, so a stage we are already in is ignored
-function ns:StartPhaseFromBossMod(stage)
-    if ns:IsSecret(stage) or not tonumber(stage) or not ns.mainTimerData.timerRunning then
-        return
-    end
-    if ns.phaseTimerData.currentPhase == ns:PhaseKey(stage) then
-        return
-    end
-    ns:StartPhase(stage)
 end
 
 --Called with a specific time and a phase, it checks for assignments for that phase at that time and if they haven't been ran before, runs them

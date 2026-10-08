@@ -27,5 +27,6 @@ App\Assignments.lua
 App\Display.lua
 App\Format.lua
 App\Timers.lua
+App\BossMods.lua
 
 main.lua

@@ -15,6 +15,13 @@ This copy is updated to load and run on Midnight (patch 12.1, The Venomous Abyss
 
 - The boss list in [Config/Data.lua](Config/Data.lua) is now The Venomous Abyss. Encounter ids for the Season 1 raids are listed in a comment there. When you pull a boss that isn't set up, the addon prints its encounter id in chat.
 - Addons can't read the combat log anymore, so phases now follow the stages BigWigs or DBM detect. Write phase timings as `00:50, p2` (or `{time:00:50,p2}` in an MRT note) and they start counting when your boss mod switches to stage 2. Intermissions use the boss mod's numbering, like `p1.5`. If the boss goes back to a stage, its reminders run again. Without a boss mod, start a phase with `/hrh phase 2` from a macro.
+- Ramps can follow boss abilities instead of fixed times, so you don't need an MRT note. Add a line starting with `@` to a timings box, using the ability name as it shows on your BigWigs or DBM bar:
+  - `@Spectral Coils` every cast
+  - `@Spectral Coils #2,4` only the 2nd and 4th cast, counted like the number in brackets on the bar
+  - `@Spectral Coils #2 -3` lands 3 seconds before the ability (`+3` is after)
+  - `@1299010 #2` a spell id instead of the name
+
+  The ramp is timed so its last step lands when the ability does, and moves when the boss mod adjusts the bar. Steps that should have started before the bar appeared show as soon as it does. The Boss Abilities tab of each boss lists the abilities your boss mod showed bars for. With both BigWigs and DBM installed, the first one to show a matching bar is followed for that pull. `@` lines are kept when you import an MRT note, and still work when the addon reads times from the MRT note.
 - Spell charges and haste can be hidden from addons during encounters. When charges can't be read, "Save Radiance"/"Save Engulfs" reminders assume both charges are spent and show early. Haste uses the last value read outside the encounter.
 - Text to speech uses the new `C_VoiceChat.SpeakText` arguments, and spec and talent checks use `C_SpecializationInfo` and `C_SpellBook`.
 - The built-in Preservation default plans are for Manaforge Omega bosses and won't show for the new raid.

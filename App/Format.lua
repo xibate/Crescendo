@@ -27,35 +27,96 @@ function ns:ConvertTimesToTable(timeString)
     }
     if timeString then
         for time in timeString:gmatch("[^\r\n]+") do
-            local phase = nil
-            if time:find(',') then
-                for val in time:gmatch("([^,]+)") do
-                    local phaseNumber = val:match('p%s*(%d+%.?%d*)')
-                    if phaseNumber then
-                        phase = ns:PhaseKey(phaseNumber)
-                    else
-                        time = val
+            --Lines starting with @ are boss ability anchors, ParseAbilityAnchors reads those
+            if not time:find('^%s*@') then
+                local phase = nil
+                if time:find(',') then
+                    for val in time:gmatch("([^,]+)") do
+                        local phaseNumber = val:match('p%s*(%d+%.?%d*)')
+                        if phaseNumber then
+                            phase = ns:PhaseKey(phaseNumber)
+                        else
+                            time = val
+                        end
                     end
                 end
-            end
-            if string.find(time, ':') then
-                local timeSplit = {}
-                for val in time:gmatch("([^:]+)") do
-                    table.insert(timeSplit, tonumber(val))
+                if string.find(time, ':') then
+                    local timeSplit = {}
+                    for val in time:gmatch("([^:]+)") do
+                        table.insert(timeSplit, tonumber(val))
+                    end
+                    time = timeSplit[1] * 60 + timeSplit[2]
                 end
-                time = timeSplit[1] * 60 + timeSplit[2]
-            end
-            if not phase then
-                table.insert(timesTable.main, tonumber(time))
-            else
-                if not timesTable[phase] then
-                    timesTable[phase] = {}
+                if not phase then
+                    table.insert(timesTable.main, tonumber(time))
+                else
+                    if not timesTable[phase] then
+                        timesTable[phase] = {}
+                    end
+                    table.insert(timesTable[phase], tonumber(time))
                 end
-                table.insert(timesTable[phase], tonumber(time))
             end
         end
     end
     return timesTable
+end
+
+--Returns only the boss ability lines of a timings box, so importing a note doesn't remove them
+function ns:KeepAbilityLines(timeString)
+    local kept = ''
+    if timeString then
+        for line in timeString:gmatch("[^\r\n]+") do
+            if line:find('^%s*@') then
+                kept = kept .. line .. '\n'
+            end
+        end
+    end
+    return kept
+end
+
+--Checks the text typed in a timings box, ability lines can use any characters but time lines can't contain MRT note parts
+function ns:IsValidTimingsText(timeString)
+    for line in timeString:gmatch("[^\r\n]+") do
+        if not line:find('^%s*@') and line:find("[{}SCAR]") then
+            return false
+        end
+    end
+    return true
+end
+
+--Reads the boss ability lines of a timings box. '@Spectral Coils' is every cast, '@Spectral Coils #2,4' only the
+--2nd and 4th cast as counted on the boss mod bar, a spell id works instead of the name and '-2' or '+1' at the end
+--moves the ramp that many seconds before or after the ability
+function ns:ParseAbilityAnchors(timeString)
+    local anchors = {}
+    if timeString then
+        for line in timeString:gmatch("[^\r\n]+") do
+            local text = line:match('^%s*@%s*(.-)%s*$')
+            if text and text ~= '' then
+                local anchor = {
+                    ['shift'] = 0,
+                    ['counts'] = nil
+                }
+                local shift = text:match('%s([%+%-]%d+%.?%d*)$')
+                if shift then
+                    anchor['shift'] = tonumber(shift)
+                    text = text:gsub('%s[%+%-]%d+%.?%d*$', '')
+                end
+                local counts = text:match('#%s*([%d%s,]+)$')
+                if counts then
+                    anchor['counts'] = {}
+                    for count in counts:gmatch('%d+') do
+                        anchor['counts'][tonumber(count)] = true
+                    end
+                    text = text:gsub('%s*#%s*[%d%s,]+$', '')
+                end
+                anchor['spellId'] = tonumber(text)
+                anchor['name'] = text:lower()
+                table.insert(anchors, anchor)
+            end
+        end
+    end
+    return anchors
 end
 
 --Convert from MRTNote format to Table to write into the DB

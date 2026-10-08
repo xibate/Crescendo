@@ -52,12 +52,14 @@ startTimer:SetScript("OnEvent", function(_, event, encounterId, encounterName, d
     if (event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and ns.bosses[encounterId]) or (event == "PLAYER_REGEN_DISABLED" and HarreksRampHelperDB.testing.testMode) then
         ns:SetPlayerSpec()
         if ns.specSupported then
+            ns.currentEncounterId = event == "ENCOUNTER_START" and encounterId or nil
             ns:SetupTimings(event, encounterId, difficultyId)
             if encounterId and next(ns.bosses[encounterId].phases[ns.difficulties[difficultyId].slug]) ~= nil then
                 local bossPhaseChanges = ns.bosses[encounterId].phases[ns.difficulties[difficultyId].slug]
                 ns:SetupPhaseChanges(bossPhaseChanges)
             end
             ns:StartTimer()
+            ns:ReplayEarlyBossModEvents()
         end
     end
 end)
@@ -68,21 +70,6 @@ stopTimer:RegisterEvent("PLAYER_REGEN_ENABLED")
 stopTimer:SetScript("OnEvent", function(_, event)
     if event == "ENCOUNTER_END" or (event == "PLAYER_REGEN_ENABLED" and HarreksRampHelperDB.testing.testMode) then
         ns:StopTimer()
-    end
-end)
-
-local bossModStages = CreateFrame("Frame") --Follows the stages BigWigs and DBM detect, since addons can't see phase changes in the combat log anymore
-bossModStages:RegisterEvent("PLAYER_LOGIN")
-bossModStages:SetScript("OnEvent", function()
-    if BigWigsLoader and BigWigsLoader.RegisterMessage then
-        BigWigsLoader.RegisterMessage(ns, "BigWigs_SetStage", function(_, _, stage)
-            ns:StartPhaseFromBossMod(stage)
-        end)
-    end
-    if DBM and DBM.RegisterCallback then
-        DBM:RegisterCallback("DBM_SetStage", function(_, _, _, stage)
-            ns:StartPhaseFromBossMod(stage)
-        end)
     end
 end)
 
