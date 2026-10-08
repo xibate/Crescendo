@@ -73,20 +73,19 @@ function ns:IsDue(reminder, timeLeft)
     return timeLeft <= 0.25
 end
 
---Seconds until a spell with two charges has both back. When the charges are secret during the encounter, both are
---assumed spent so the reminder shows early rather than late
+--How long it takes to get all charges of a spell back after spending one now. A charges step shows once that is all the
+--time left, so a charge spent from then on wouldn't be back for the ramp. When the charges are secret during the
+--encounter, the values read before it are used and all charges are assumed spent, so the step shows early rather than late
 function ns:TimeUntilFullCharges(spellId)
     local charges = C_Spell.GetSpellCharges(spellId)
     if not charges or ns:IsSecret(charges.currentCharges) or ns:IsSecret(charges.cooldownStartTime) or ns:IsSecret(charges.cooldownDuration) then
-        return 2 * ns:GetRechargeTime(spellId)
+        return ns:GetMaxCharges(spellId) * ns:GetRechargeTime(spellId)
     end
-    ns.rechargeTimes[spellId] = charges.cooldownDuration
-    if charges.currentCharges >= 2 then
+    ns:RememberCharges(spellId, charges)
+    local maxCharges = ns:GetMaxCharges(spellId)
+    if charges.currentCharges >= maxCharges then
         return charges.cooldownDuration
     end
     local rechargeLeft = charges.cooldownStartTime + charges.cooldownDuration - GetTime()
-    if charges.currentCharges == 1 then
-        return charges.cooldownDuration + rechargeLeft
-    end
-    return 2 * charges.cooldownDuration + rechargeLeft
+    return rechargeLeft + (maxCharges - charges.currentCharges) * charges.cooldownDuration
 end

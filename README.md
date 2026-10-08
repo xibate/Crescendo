@@ -36,13 +36,14 @@ A name is either a ramp from the Ramps tab, or any spell by name or spell id, wh
 
 ## Ramps
 
-The Ramps tab has the ramps of each spec. They start from a few starter ramps and can be changed, added or deleted. A ramp has the spell MRT notes use for it and one step per line:
+The Ramps tab has the ramps of each spec. They start from a few starter ramps and can be changed, added or deleted. The starter ramps follow the Midnight 12.1 healing guides: Evangelism and Ultimate Penitence for Discipline, Stasis for Preservation, Tranquility and Tree of Life for Restoration Druid, and Spirit Link Totem for Restoration Shaman. Holy Priest and Holy Paladin don't ramp, their cooldowns go in the plan as spells. A ramp has the spell MRT notes use for it and one step per line:
 
 ```
 charges 194509 | Save Radiance charges | setup
-12gcd | Start atonement ramp | setup | icon 17 | say Start ramp
-3gcd | Double Radiance | icon 194509
-0 | Evangelism
+6gcd | Start ramp: Pain, Shield, Flash Heal | setup | icon 17 | say Start ramp
+3gcd | Evangelism
+2gcd | Radiance twice | icon 194509
+0 | Mind Blast, Penance | icon 47540 | say Penance
 ```
 
 | Part | Meaning |

@@ -1,6 +1,6 @@
 local _, ns = ...
 
-local DATABASE_VERSION = 2
+local DATABASE_VERSION = 3
 
 --Saved settings:
 -- options        display, text to speech and MRT note settings
@@ -78,11 +78,9 @@ local function EntryName(oldName)
         return RENAMED_RAMPS[oldName]
     end
     local spellId = OLD_SPELL_NAMES[oldName]
-    if spellId then
-        local info = C_Spell.GetSpellInfo(spellId)
-        return info and info.name or tostring(spellId)
-    end
-    return oldName
+    local info = spellId and C_Spell.GetSpellInfo(spellId)
+    --Spells removed in Midnight keep their old name, the pull then says it is skipped
+    return info and info.name or oldName
 end
 
 local function ConvertTimings(timings, enabled)
@@ -146,6 +144,27 @@ local function MigrateTimingBoxes(db)
     end
 end
 
+--Starter ramps saved before version 3 weren't checked against Midnight. Unchanged ones are removed, then the current
+--starter ramps are added where a spec doesn't have a ramp with that name
+local function UpdateStarterRamps(db)
+    for specKey, outdated in pairs(ns.outdatedStarterRamps) do
+        local ramps = Child(db.ramps, specKey)
+        for name, steps in pairs(outdated) do
+            if type(ramps[name]) == 'table' and ramps[name].steps == steps then
+                ramps[name] = nil
+            end
+        end
+    end
+    for specKey, starters in pairs(ns.starterRamps) do
+        local ramps = Child(db.ramps, specKey)
+        for name, ramp in pairs(starters) do
+            if ramps[name] == nil then
+                ramps[name] = Copy(ramp)
+            end
+        end
+    end
+end
+
 --Creates the saved settings or fills in what is missing. Only nil is replaced, so options turned off stay off
 function ns:InitDatabase()
     if type(ZynxRampHelperDB) ~= 'table' then
@@ -170,6 +189,9 @@ function ns:InitDatabase()
     end
     if (db.version or 1) < 2 then
         MigrateTimingBoxes(db)
+    end
+    if (db.version or 1) < 3 then
+        UpdateStarterRamps(db)
     end
     db.version = DATABASE_VERSION
     ns.db = db

@@ -11,8 +11,9 @@ local _, ns = ...
 local QUESTION_MARK_ICON = 134400
 local DEFAULT_RECHARGE = 30
 
---Recharge time of charged spells, kept while it can be read since it can be secret during encounters
+--Recharge time and number of charges of charged spells, kept while they can be read since they can be secret during encounters
 ns.rechargeTimes = {}
+ns.maxCharges = {}
 
 local function Trim(text)
     return (text:gsub('^%s+', ''):gsub('%s+$', ''))
@@ -117,18 +118,32 @@ local function ChargedSpells(specKey)
     return spells
 end
 
---Keeps the recharge time of the spells the ramps follow while it can be read
+--Keeps the recharge time and number of charges of the spells the ramps follow while they can be read
 function ns:UpdateRechargeTimes(specKey)
     for spell in pairs(ChargedSpells(specKey)) do
-        local charges = C_Spell.GetSpellCharges(spell)
-        if charges and not ns:IsSecret(charges.cooldownDuration) and charges.cooldownDuration and charges.cooldownDuration > 0 then
-            ns.rechargeTimes[spell] = charges.cooldownDuration
-        end
+        ns:RememberCharges(spell, C_Spell.GetSpellCharges(spell))
+    end
+end
+
+function ns:RememberCharges(spell, charges)
+    if not charges then
+        return
+    end
+    if not ns:IsSecret(charges.cooldownDuration) and charges.cooldownDuration and charges.cooldownDuration > 0 then
+        ns.rechargeTimes[spell] = charges.cooldownDuration
+    end
+    if not ns:IsSecret(charges.maxCharges) and charges.maxCharges then
+        ns.maxCharges[spell] = charges.maxCharges
     end
 end
 
 function ns:GetRechargeTime(spell)
     return ns.rechargeTimes[spell] or DEFAULT_RECHARGE
+end
+
+--Number of charges of a spell, 2 when it hasn't been read yet
+function ns:GetMaxCharges(spell)
+    return ns.maxCharges[spell] or 2
 end
 
 --The reminder steps of a plan entry, with offsets in seconds before the entry's time. A ramp gives its steps, any other
