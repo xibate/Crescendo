@@ -220,7 +220,7 @@ end
 function ns:SetupPhaseChanges(phaseChangesTable)
     ns.phaseTimerData.phaseTriggerCounter = {}
     ns.phaseTimerData.phaseActivations = {}
-    --Since Midnight addons can't read the combat log, phases have to be started by hand with /hrh phase <number>
+    --Since Midnight addons can't read the combat log, phases come from BigWigs/DBM stages (main.lua) or /hrh phase <number>
     if not ns.combatLogAvailable then
         return
     end

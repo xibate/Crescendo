@@ -24,10 +24,22 @@ function ns:StopTimer()
         ns.phaseTimerData.runningTimer:Cancel()
         ns.phaseTimerData.timerRunning = false
     end
+    ns.phaseTimerData.currentPhase = nil
 end
 
 --When the conditions for starting a phase are met, starts the phase timer with the data for that phase
 function ns:StartPhase(phase)
+    phase = ns:PhaseKey(phase)
+    --A boss can go back to a phase it was in before, the reminders for that phase should show again
+    if ns.fightAssignments[phase] then
+        for _, assignmentType in pairs(ns.fightAssignments[phase]) do
+            for _, assignmentSet in pairs(assignmentType) do
+                for _, assignment in pairs(assignmentSet) do
+                    assignment['loaded'] = false
+                end
+            end
+        end
+    end
     ns.phaseTimerData.startTime = GetTime()
     ns.phaseTimerData.currentTimer = 0
     ns.phaseTimerData.timerRunning = true
@@ -41,13 +53,24 @@ function ns:StartPhase(phase)
     end)
 end
 
---Starts a phase from the /hrh phase <number> command, meant to be put in a macro since phases can't be detected automatically since Midnight
+--Starts a phase from the /hrh phase <number> command, for when no boss mod is installed to report the phases
 function ns:StartPhaseManually(phase)
     if not ns.mainTimerData.timerRunning then
         ns:WriteOutput('Phase ' .. phase .. ' can only be started during an encounter')
         return
     end
     ns:StartPhase(phase)
+end
+
+--Starts a phase when BigWigs or DBM report a stage change. Both can be installed, so a stage we are already in is ignored
+function ns:StartPhaseFromBossMod(stage)
+    if ns:IsSecret(stage) or not tonumber(stage) or not ns.mainTimerData.timerRunning then
+        return
+    end
+    if ns.phaseTimerData.currentPhase == ns:PhaseKey(stage) then
+        return
+    end
+    ns:StartPhase(stage)
 end
 
 --Called with a specific time and a phase, it checks for assignments for that phase at that time and if they haven't been ran before, runs them

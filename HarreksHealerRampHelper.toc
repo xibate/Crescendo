@@ -5,6 +5,7 @@
 ## Notes: Automatic reminder creator for ramp healers in raid
 ## Author: Harrek
 ## SavedVariables: HarreksRampHelperDB
+## OptionalDeps: BigWigs, DBM-Core
 
 libs\LibStub.lua
 libs\CallbackHandler-1.0\CallbackHandler-1.0.lua

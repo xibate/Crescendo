@@ -11,6 +11,15 @@ function ns:IsSecret(value)
     return issecretvalue ~= nil and issecretvalue(value)
 end
 
+--Phases are stored under a string key, '2', '02' and 2 all become '2'. Boss mods use stages like 1.5 or 2.5 for intermissions, those become '2.5'
+function ns:PhaseKey(phase)
+    local number = tonumber(phase)
+    if number then
+        return tostring(number)
+    end
+    return tostring(phase)
+end
+
 --Convert a string of times separated by new lines into a table. If the time has phases marked by 'p#' then they go into a table indexed by the phase number, otherwise they go into main
 function ns:ConvertTimesToTable(timeString)
     local timesTable = {
@@ -21,9 +30,9 @@ function ns:ConvertTimesToTable(timeString)
             local phase = nil
             if time:find(',') then
                 for val in time:gmatch("([^,]+)") do
-                    local phaseNumber = val:match('p%s*(%d+)')
+                    local phaseNumber = val:match('p%s*(%d+%.?%d*)')
                     if phaseNumber then
-                        phase = phaseNumber
+                        phase = ns:PhaseKey(phaseNumber)
                     else
                         time = val
                     end
@@ -71,10 +80,10 @@ function ns:ConvertNoteToTable(noteString, spec, fightId, diffSlug)
                                 track = nil
                             }
                             for val in time:gmatch("([^,]+)") do
-                                local phaseNumber = val:match('^%s*p(%d+)%s*$')
+                                local phaseNumber = val:match('^%s*p(%d+%.?%d*)%s*$')
                                 if phaseNumber then
-                                    --Phase written as p2, these phases are started by hand with /hrh phase 2
-                                    values.phase = ' p' .. phaseNumber
+                                    --Phase written as p2, these follow the stages reported by BigWigs or DBM
+                                    values.phase = ' p' .. ns:PhaseKey(phaseNumber)
                                 elseif val:find('S') then
                                     values.track = val
                                 else

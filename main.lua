@@ -71,6 +71,21 @@ stopTimer:SetScript("OnEvent", function(_, event)
     end
 end)
 
+local bossModStages = CreateFrame("Frame") --Follows the stages BigWigs and DBM detect, since addons can't see phase changes in the combat log anymore
+bossModStages:RegisterEvent("PLAYER_LOGIN")
+bossModStages:SetScript("OnEvent", function()
+    if BigWigsLoader and BigWigsLoader.RegisterMessage then
+        BigWigsLoader.RegisterMessage(ns, "BigWigs_SetStage", function(_, _, stage)
+            ns:StartPhaseFromBossMod(stage)
+        end)
+    end
+    if DBM and DBM.RegisterCallback then
+        DBM:RegisterCallback("DBM_SetStage", function(_, _, _, stage)
+            ns:StartPhaseFromBossMod(stage)
+        end)
+    end
+end)
+
 local hasteTracker = CreateFrame("Frame") --Keeps the last readable haste value, since it can be secret during encounters
 hasteTracker:RegisterEvent("PLAYER_ENTERING_WORLD")
 hasteTracker:RegisterUnitEvent("UNIT_SPELL_HASTE", "player")
