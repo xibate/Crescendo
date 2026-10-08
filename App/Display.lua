@@ -7,7 +7,7 @@ function ns:CreateDisplayFrame(num)
     ns.frames[num]:SetSize(1, 1)
     ns.frames[num]:SetHeight(1)
     if num == 1 then
-        ns.frames[num]:SetPoint("CENTER", HarreksRampHelperDB.options.framePositionX, HarreksRampHelperDB.options.framePositionY)
+        ns.frames[num]:SetPoint("CENTER", ZynxRampHelperDB.options.framePositionX, ZynxRampHelperDB.options.framePositionY)
     else
         local points = ns:GetAttachmentPoints()
         ns.frames[num]:SetPoint(points.child, ns.frames[num - 1], points.parent, points.xSpacing, points.ySpacing)
@@ -15,17 +15,17 @@ function ns:CreateDisplayFrame(num)
     ns.frames[num]:SetFrameStrata("TOOLTIP")
     ns.frames[num].icon = ns.frames[num]:CreateTexture(nil, "OVERLAY") --Icon that will be displayed
     ns.frames[num].icon:SetPoint("CENTER", ns.frames[num], "CENTER", 0, 0) --Attached to the info frame, in the center
-    ns.frames[num].icon:SetSize(HarreksRampHelperDB.options.iconSizeW, HarreksRampHelperDB.options.iconSizeH)
+    ns.frames[num].icon:SetSize(ZynxRampHelperDB.options.iconSizeW, ZynxRampHelperDB.options.iconSizeH)
     ns.frames[num].text = ns.frames[num]:CreateFontString(nil, "OVERLAY", "GameFontHighlight") --Text is the text that will be displayed
     ns.frames[num].text:SetPoint("TOP", ns.frames[num].icon, "BOTTOM") --Attach the top of the text to the bottom of the icon
     ns.frames[num].text:SetShadowColor(0, 0, 0, 1)
     ns.frames[num].text:SetShadowOffset(-2, -2)
-    ns.frames[num].text:SetScale(HarreksRampHelperDB.options.textSize)
+    ns.frames[num].text:SetScale(ZynxRampHelperDB.options.textSize)
     ns.frames[num].timer = ns.frames[num]:CreateFontString(nil, "OVERLAY", "GameFontHighlight") --Timer to be shown for the assignments marked with showTimer
     ns.frames[num].timer:SetPoint("CENTER", ns.frames[num].icon, "CENTER") --Attached to the icon, in the center
     ns.frames[num].timer:SetShadowColor(0, 0, 0, 1)
     ns.frames[num].timer:SetShadowOffset(-2, -2)
-    ns.frames[num].timer:SetScale(HarreksRampHelperDB.options.timerSize)
+    ns.frames[num].timer:SetScale(ZynxRampHelperDB.options.timerSize)
     ns.frames[num].busy = false
 end
 
@@ -76,13 +76,13 @@ end
 --Re init display in case settings changed
 function ns:ResetDisplay()
     if ns.frames[1] then
-        ns.frames[1]:SetPoint("CENTER", HarreksRampHelperDB.options.framePositionX, HarreksRampHelperDB.options.framePositionY)
+        ns.frames[1]:SetPoint("CENTER", ZynxRampHelperDB.options.framePositionX, ZynxRampHelperDB.options.framePositionY)
     end
     local points = ns:GetAttachmentPoints()
     for index, _ in pairs(ns.frames) do
-        ns.frames[index].text:SetScale(HarreksRampHelperDB.options.textSize)
-        ns.frames[index].icon:SetSize(HarreksRampHelperDB.options.iconSizeW, HarreksRampHelperDB.options.iconSizeH)
-        ns.frames[index].timer:SetScale(HarreksRampHelperDB.options.timerSize)
+        ns.frames[index].text:SetScale(ZynxRampHelperDB.options.textSize)
+        ns.frames[index].icon:SetSize(ZynxRampHelperDB.options.iconSizeW, ZynxRampHelperDB.options.iconSizeH)
+        ns.frames[index].timer:SetScale(ZynxRampHelperDB.options.timerSize)
         if not (index == 1) then
             ns.frames[index]:ClearAllPoints()
             ns.frames[index]:SetPoint(points.child, ns.frames[index - 1], points.parent, points.xSpacing, points.ySpacing)
@@ -92,27 +92,27 @@ end
 
 --Sends a TTS message with some predefined parameters
 function ns:SendTts(text)
-    if HarreksRampHelperDB.options.ttsEnabled then
+    if ZynxRampHelperDB.options.ttsEnabled then
         --The destination argument was removed from SpeakText, the enum it used no longer exists
-        C_VoiceChat.SpeakText(HarreksRampHelperDB.options.ttsVoice, text, HarreksRampHelperDB.options.ttsRate, HarreksRampHelperDB.options.ttsVolume)
+        C_VoiceChat.SpeakText(ZynxRampHelperDB.options.ttsVoice, text, ZynxRampHelperDB.options.ttsRate, ZynxRampHelperDB.options.ttsVolume)
     end
 end
 
 --Outputs and error message to chat. This is our choice instead of making the addon crash and stop working
 function ns:WriteOutput(text)
-    print('|cffff680aHarrek\'s Healer Ramp Helper:|r ' .. text)
+    print('|cffff680aZynx Ramp Helper:|r ' .. text)
 end
 
 --Toggles the first three displays for debugging mode
 function ns:ToggleDisplay()
-    local showing = HarreksRampHelperDB.options.toggleDisplay
+    local showing = ZynxRampHelperDB.options.toggleDisplay
     local text, icon, timer, busy
     if showing then
         text, icon, timer, busy = '', 0, '', false
-        HarreksRampHelperDB.options.toggleDisplay = false
+        ZynxRampHelperDB.options.toggleDisplay = false
     else
         text, icon, timer, busy = 'Ramp Helper', 450907, '2.3', true
-        HarreksRampHelperDB.options.toggleDisplay = true
+        ZynxRampHelperDB.options.toggleDisplay = true
     end
     for i = 1, 3 do
         if not ns.frames[i] then
@@ -128,22 +128,22 @@ end
 --Get the attachment points depending on current settings
 function ns:GetAttachmentPoints()
     local childPoint, parentPoint, xSpacing, ySpacing = '', '', 0, 0
-    if HarreksRampHelperDB.options.growDirection == 'top' then
+    if ZynxRampHelperDB.options.growDirection == 'top' then
         childPoint = "BOTTOM"
         parentPoint = "TOP"
-        ySpacing = HarreksRampHelperDB.options.displaySpacing
-    elseif HarreksRampHelperDB.options.growDirection == 'bottom' then
+        ySpacing = ZynxRampHelperDB.options.displaySpacing
+    elseif ZynxRampHelperDB.options.growDirection == 'bottom' then
         childPoint = "TOP"
         parentPoint = "BOTTOM"
-        ySpacing = HarreksRampHelperDB.options.displaySpacing * -1
-    elseif HarreksRampHelperDB.options.growDirection == 'left' then
+        ySpacing = ZynxRampHelperDB.options.displaySpacing * -1
+    elseif ZynxRampHelperDB.options.growDirection == 'left' then
         childPoint = "RIGHT"
         parentPoint = "LEFT"
-        xSpacing = HarreksRampHelperDB.options.displaySpacing * -1
-    elseif HarreksRampHelperDB.options.growDirection == 'right' then
+        xSpacing = ZynxRampHelperDB.options.displaySpacing * -1
+    elseif ZynxRampHelperDB.options.growDirection == 'right' then
         childPoint = "LEFT"
         parentPoint = "RIGHT"
-        xSpacing = HarreksRampHelperDB.options.displaySpacing
+        xSpacing = ZynxRampHelperDB.options.displaySpacing
     end
     return {
         ['child'] = childPoint,

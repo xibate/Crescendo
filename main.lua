@@ -49,7 +49,7 @@ startTimer:SetScript("OnEvent", function(_, event, encounterId, encounterName, d
     if event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and not ns.bosses[encounterId] then
         ns:WriteOutput('No timings for ' .. encounterName .. ', add encounter id ' .. encounterId .. ' to Config/Data.lua to use the addon on this boss')
     end
-    if (event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and ns.bosses[encounterId]) or (event == "PLAYER_REGEN_DISABLED" and HarreksRampHelperDB.testing.testMode) then
+    if (event == "ENCOUNTER_START" and ns.difficulties[difficultyId] and ns.bosses[encounterId]) or (event == "PLAYER_REGEN_DISABLED" and ZynxRampHelperDB.testing.testMode) then
         ns:SetPlayerSpec()
         if ns.specSupported then
             ns.currentEncounterId = event == "ENCOUNTER_START" and encounterId or nil
@@ -68,7 +68,7 @@ local stopTimer = CreateFrame("Frame") --Frame that stops the timer on encounter
 stopTimer:RegisterEvent("ENCOUNTER_END")
 stopTimer:RegisterEvent("PLAYER_REGEN_ENABLED")
 stopTimer:SetScript("OnEvent", function(_, event)
-    if event == "ENCOUNTER_END" or (event == "PLAYER_REGEN_ENABLED" and HarreksRampHelperDB.testing.testMode) then
+    if event == "ENCOUNTER_END" or (event == "PLAYER_REGEN_ENABLED" and ZynxRampHelperDB.testing.testMode) then
         ns:StopTimer()
     end
 end)

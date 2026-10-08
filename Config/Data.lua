@@ -13,7 +13,7 @@ ns.specs = {
 --https://wago.tools/db2/DungeonEncounter
 --The Venomous Abyss (Midnight Season 2). Encounter ids taken from BigWigs
 --Phase triggers used combat log events, which addons can't read since Midnight, so phases are left empty.
---Phases now follow the stages reported by BigWigs or DBM, or /hrh phase <number> without a boss mod
+--Phases now follow the stages reported by BigWigs or DBM, or /zrh phase <number> without a boss mod
 --Midnight Season 1 raids, add them here to use the addon there: Imperator Averzian 3176, Vorasius 3177,
 --Vaelgor & Ezzorak 3178, Fallen-King Salhadaar 3179, Lightblinded Vanguard 3180, Crown of the Cosmos 3181,
 --Belo'ren, Child of Al'ar 3182, Midnight Falls 3183, Chimaerus the Undreamt God 3306

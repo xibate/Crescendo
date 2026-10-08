@@ -1,6 +1,6 @@
 --Namespace
 local _, ns = ...
-local version = "2.0.3-midnight"
+local version = "1.0.0"
 local defaultOptions = {
     ['testing'] = {
         ['testMode'] = false
@@ -38,26 +38,26 @@ local addonLoader = CreateFrame("Frame")
 addonLoader:RegisterEvent("ADDON_LOADED")
 addonLoader:RegisterEvent("PLAYER_LOGOUT")
 addonLoader:SetScript("OnEvent", function(self, event, name)
-    if event == "ADDON_LOADED" and name == "HarreksHealerRampHelper" then
-        if type(HarreksRampHelperDB) ~= 'table' then
-            HarreksRampHelperDB = defaultOptions
+    if event == "ADDON_LOADED" and name == "ZynxRampHelper" then
+        if type(ZynxRampHelperDB) ~= 'table' then
+            ZynxRampHelperDB = defaultOptions
         else
             for key, optionGroup in pairs(defaultOptions) do
-                if not HarreksRampHelperDB[key] then
-                    HarreksRampHelperDB[key] = {}
+                if not ZynxRampHelperDB[key] then
+                    ZynxRampHelperDB[key] = {}
                 end
                 for option, value in pairs(optionGroup) do
-                    if not HarreksRampHelperDB[key][option] then
-                        HarreksRampHelperDB[key][option] = value
+                    if not ZynxRampHelperDB[key][option] then
+                        ZynxRampHelperDB[key][option] = value
                     end
                 end
             end
         end
         --Initialize configurations
-        HarreksRampHelperDB.options.toggleDisplay = false
-        HarreksRampHelperDB.import.fight = nil
-        HarreksRampHelperDB.import.difficulty = nil
-        HarreksRampHelperDB.import.importText = nil
+        ZynxRampHelperDB.options.toggleDisplay = false
+        ZynxRampHelperDB.import.fight = nil
+        ZynxRampHelperDB.import.difficulty = nil
+        ZynxRampHelperDB.import.importText = nil
         local defaultOptionWidth = 1
 
         --Initialize options table
@@ -99,7 +99,7 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 2,
                                     func = function()
                                         for option, defaultValue in pairs(defaultOptions.options) do
-                                            HarreksRampHelperDB.options[option] = defaultValue
+                                            ZynxRampHelperDB.options[option] = defaultValue
                                         end
                                         ns:ResetDisplay()
                                     end
@@ -118,9 +118,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 11,
                                     step = 1,
                                     bigStep = 10,
-                                    get = function() return HarreksRampHelperDB.options.framePositionX end,
+                                    get = function() return ZynxRampHelperDB.options.framePositionX end,
                                     set = function(_, valueX)
-                                        HarreksRampHelperDB.options.framePositionX = valueX
+                                        ZynxRampHelperDB.options.framePositionX = valueX
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -133,9 +133,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 12,
                                     step = 1,
                                     bigStep = 10,
-                                    get = function() return HarreksRampHelperDB.options.framePositionY end,
+                                    get = function() return ZynxRampHelperDB.options.framePositionY end,
                                     set = function(_, valueY)
-                                        HarreksRampHelperDB.options.framePositionY = valueY
+                                        ZynxRampHelperDB.options.framePositionY = valueY
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -145,9 +145,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     width = defaultOptionWidth,
                                     order = 13,
                                     values = {['top'] = 'top', ['bottom'] = 'bottom', ['left'] = 'left', ['right'] = 'right'},
-                                    get = function() return HarreksRampHelperDB.options.growDirection end,
+                                    get = function() return ZynxRampHelperDB.options.growDirection end,
                                     set = function(_, direction)
-                                        HarreksRampHelperDB.options.growDirection = direction
+                                        ZynxRampHelperDB.options.growDirection = direction
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -167,9 +167,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 21,
                                     step = 0.1,
                                     bigStep = 0.1,
-                                    get = function() return HarreksRampHelperDB.options.textSize end,
+                                    get = function() return ZynxRampHelperDB.options.textSize end,
                                     set = function(_, size)
-                                        HarreksRampHelperDB.options.textSize = size
+                                        ZynxRampHelperDB.options.textSize = size
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -184,9 +184,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 22,
                                     step = 0.1,
                                     bigStep = 0.1,
-                                    get = function() return HarreksRampHelperDB.options.timerSize end,
+                                    get = function() return ZynxRampHelperDB.options.timerSize end,
                                     set = function(_, size)
-                                        HarreksRampHelperDB.options.timerSize = size
+                                        ZynxRampHelperDB.options.timerSize = size
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -201,9 +201,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 23,
                                     step = 1,
                                     bigStep = 2,
-                                    get = function() return HarreksRampHelperDB.options.iconSizeW end,
+                                    get = function() return ZynxRampHelperDB.options.iconSizeW end,
                                     set = function(_, size)
-                                        HarreksRampHelperDB.options.iconSizeW = size
+                                        ZynxRampHelperDB.options.iconSizeW = size
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -218,9 +218,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 23,
                                     step = 1,
                                     bigStep = 2,
-                                    get = function() return HarreksRampHelperDB.options.iconSizeH end,
+                                    get = function() return ZynxRampHelperDB.options.iconSizeH end,
                                     set = function(_, size)
-                                        HarreksRampHelperDB.options.iconSizeH = size
+                                        ZynxRampHelperDB.options.iconSizeH = size
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -235,9 +235,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 24,
                                     step = 1,
                                     bigStep = 5,
-                                    get = function() return HarreksRampHelperDB.options.displaySpacing end,
+                                    get = function() return ZynxRampHelperDB.options.displaySpacing end,
                                     set = function(_, spacing)
-                                        HarreksRampHelperDB.options.displaySpacing = spacing
+                                        ZynxRampHelperDB.options.displaySpacing = spacing
                                         ns:ResetDisplay()
                                     end
                                 },
@@ -253,7 +253,7 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     width = defaultOptionWidth,
                                     order = 31,
                                     func = function()
-                                        ns:SendTts('Healer Ramp Helper')
+                                        ns:SendTts('Zynx Ramp Helper')
                                     end
                                 },
                                 ttsEnabled = {
@@ -261,8 +261,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     name = "Enable Text to Speech",
                                     width = defaultOptionWidth,
                                     order = 32,
-                                    get = function() return HarreksRampHelperDB.options.ttsEnabled end,
-                                    set = function(_, value) HarreksRampHelperDB.options.ttsEnabled = value end
+                                    get = function() return ZynxRampHelperDB.options.ttsEnabled end,
+                                    set = function(_, value) ZynxRampHelperDB.options.ttsEnabled = value end
                                 },
                                 ttsVoice = {
                                     type = "select",
@@ -276,8 +276,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                         end
                                         return voices
                                     end,
-                                    get = function() return HarreksRampHelperDB.options.ttsVoice end,
-                                    set = function(_, voice) HarreksRampHelperDB.options.ttsVoice = voice end
+                                    get = function() return ZynxRampHelperDB.options.ttsVoice end,
+                                    set = function(_, voice) ZynxRampHelperDB.options.ttsVoice = voice end
                                 },
                                 ttsRate = {
                                     type = "range",
@@ -290,8 +290,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 34,
                                     step = 1,
                                     bigStep = 0.5,
-                                    get = function() return HarreksRampHelperDB.options.ttsRate end,
-                                    set = function(_, rate) HarreksRampHelperDB.options.ttsRate = rate end
+                                    get = function() return ZynxRampHelperDB.options.ttsRate end,
+                                    set = function(_, rate) ZynxRampHelperDB.options.ttsRate = rate end
                                 },
                                 ttsVolume = {
                                     type = "range",
@@ -304,8 +304,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     order = 35,
                                     step = 1,
                                     bigStep = 5,
-                                    get = function() return HarreksRampHelperDB.options.ttsVolume end,
-                                    set = function(_, volume) HarreksRampHelperDB.options.ttsVolume = volume end
+                                    get = function() return ZynxRampHelperDB.options.ttsVolume end,
+                                    set = function(_, volume) ZynxRampHelperDB.options.ttsVolume = volume end
                                 },
                                 mrtHeader = {
                                     type = "header",
@@ -323,8 +323,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     desc = "Load assignments from the main MRT Note.",
                                     width = defaultOptionWidth,
                                     order = 42,
-                                    get = function() return HarreksRampHelperDB.options.readFromNote end,
-                                    set = function(_, value) HarreksRampHelperDB.options.readFromNote = value end
+                                    get = function() return ZynxRampHelperDB.options.readFromNote end,
+                                    set = function(_, value) ZynxRampHelperDB.options.readFromNote = value end
                                 },
                                 mrtPersonalNote = {
                                     type = "toggle",
@@ -332,8 +332,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     desc = "Load assignments from the personal MRT Note.",
                                     width = defaultOptionWidth,
                                     order = 43,
-                                    get = function() return HarreksRampHelperDB.options.mrtPersonalNote end,
-                                    set = function(_, value) HarreksRampHelperDB.options.mrtPersonalNote = value end
+                                    get = function() return ZynxRampHelperDB.options.mrtPersonalNote end,
+                                    set = function(_, value) ZynxRampHelperDB.options.mrtPersonalNote = value end
                                 },
                                 extraHeader = {
                                     type = "header",
@@ -347,8 +347,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                         "the setup steps, but not the final warning to consume the ramp. In case you have another addon or weakaura that warns you of that.",
                                     width = defaultOptionWidth,
                                     order = 51,
-                                    get = function() return HarreksRampHelperDB.options.preReqsOnly end,
-                                    set = function(_, value) HarreksRampHelperDB.options.preReqsOnly = value end
+                                    get = function() return ZynxRampHelperDB.options.preReqsOnly end,
+                                    set = function(_, value) ZynxRampHelperDB.options.preReqsOnly = value end
                                 },
                                 timerDuration = {
                                     type = "range",
@@ -360,8 +360,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     softMax = 10,
                                     order = 52,
                                     step = 1,
-                                    get = function() return HarreksRampHelperDB.options.timerDuration end,
-                                    set = function(_, volume) HarreksRampHelperDB.options.timerDuration = volume end
+                                    get = function() return ZynxRampHelperDB.options.timerDuration end,
+                                    set = function(_, volume) ZynxRampHelperDB.options.timerDuration = volume end
                                 },
                             }
                         },
@@ -390,8 +390,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             type = "toggle",
                             name = "Enable Testing Mode",
                             order = 2,
-                            get = function() return HarreksRampHelperDB.testing.testMode end,
-                            set = function(_, testingEnabled) HarreksRampHelperDB.testing.testMode = testingEnabled end
+                            get = function() return ZynxRampHelperDB.testing.testMode end,
+                            set = function(_, testingEnabled) ZynxRampHelperDB.testing.testMode = testingEnabled end
                         }
                     }
                 },
@@ -402,7 +402,7 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                     args = {
                         aboutDesc = {
                             type = "description",
-                            name = "The Healer Ramp Helper is a tool designed to help healers manage their cooldowns in order to properly execute ramps. It works similarly to " ..
+                            name = "Zynx Ramp Helper is a tool designed to help healers manage their cooldowns in order to properly execute ramps. It works similarly to " ..
                             "assigning every part of a ramp's instructions as warnings or reminders but facilitates this process by automatically creating reminders for all the steps based " ..
                             "on the best recommended practices for the spec. Inside the timings menu you will find all the specs currently supported and different menus for each " ..
                             "boss on each difficulty.\n\nOpening the Ramp Types menu for each spec will show you all the current configured ramps for that spec and what reminders they consist of, " ..
@@ -411,11 +411,13 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             "turn on Testing Mode, which will pull from the test timers for your spec when you start combat.\n\nThere are also settings in the options to automatically grab " ..
                             "your assigned timers from your currently active MRT note, if you prefer to do that instead of writing your own timings in the addon " ..
                             "\n\nSince Midnight phases come from BigWigs or DBM: timings written as '00:50, p2' start counting when your boss mod shows stage 2 " ..
-                            "(intermissions are stages like p1.5). Without a boss mod you can start a phase yourself with '/hrh phase 2' from a macro." ..
+                            "(intermissions are stages like p1.5). Without a boss mod you can start a phase yourself with '/zrh phase 2' from a macro." ..
                             "\n\nA timings line can also follow a boss ability instead of a time, like '@Spectral Coils #2' for the second cast. " ..
                             "The Boss Abilities tab of each boss explains how and lists the abilities your boss mod showed on that boss." ..
-                            "\n\nIf you have any comment or question, feel free to let me know in any of the places listed below, and thank you for using the addon." ..
-                            "\n\n-Harrek\n\nAddon Version: " .. version .. "\n\n",
+                            "\n\nZynx Ramp Helper is based on Harrek's Healer Ramp Helper, made by Harrek. The ramps and most of the addon are his work, " ..
+                            "this version updates it for Midnight. Please don't send questions about this version to Harrek, the links below are his " ..
+                            "community and his original addon." ..
+                            "\n\nAddon Version: " .. version .. "\n\n",
                             order = 1,
                             fontSize = "medium"
                         },
@@ -461,13 +463,13 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                         },
                         cursePage = {
                             type = "execute",
-                            name = "CurseForge AddOn Page",
+                            name = "Original Addon by Harrek",
                             order = 4,
                             width = 1.5,
                             func = function()
                                 local AceGUI = LibStub("AceGUI-3.0")
                                 local frame = AceGUI:Create("Window")
-                                frame:SetTitle("CurseForge AddOn Page")
+                                frame:SetTitle("Harrek's Healer Ramp Helper")
                                 frame:SetWidth(300)
                                 frame:SetHeight(80)
                                 frame:SetCallback("OnClose", function(widget) AceGUI:Release(widget) end)
@@ -487,13 +489,13 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
         local currentOrder = 2
         --For each spec in the data file
         for specId, specName in pairs(ns.specs) do
-            --Check HarreksRampHelperDB for existence of this spec
-            if not HarreksRampHelperDB[specName] then
-                HarreksRampHelperDB[specName] = {}
+            --Check ZynxRampHelperDB for existence of this spec
+            if not ZynxRampHelperDB[specName] then
+                ZynxRampHelperDB[specName] = {}
             end
             --Initialize test timers for this spec
-            if not HarreksRampHelperDB[specName].testTimers then
-                HarreksRampHelperDB[specName].testTimers = {}
+            if not ZynxRampHelperDB[specName].testTimers then
+                ZynxRampHelperDB[specName].testTimers = {}
             end
             local specTestTimers = {
                 type = "group",
@@ -519,8 +521,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
             }
             --Build list of cooldowns for settings options
             local rampsIndex, cooldownsIndex, utilitiesIndex = 2, 11, 21
-            if not HarreksRampHelperDB.options.specs[specName] then
-                HarreksRampHelperDB.options.specs[specName] = {}
+            if not ZynxRampHelperDB.options.specs[specName] then
+                ZynxRampHelperDB.options.specs[specName] = {}
             end
             local specSpells = {
                 type = "group",
@@ -616,8 +618,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     end
                                     return fights
                                 end,
-                                get = function() return HarreksRampHelperDB.import.fight end,
-                                set = function(_, fightId) HarreksRampHelperDB.import.fight = fightId end
+                                get = function() return ZynxRampHelperDB.import.fight end,
+                                set = function(_, fightId) ZynxRampHelperDB.import.fight = fightId end
                             },
                             importDifficulty = {
                                 type = "select",
@@ -631,8 +633,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                     end
                                     return difficulties
                                 end,
-                                get = function() return HarreksRampHelperDB.import.difficulty end,
-                                set = function(_, diffId) HarreksRampHelperDB.import.difficulty = diffId end
+                                get = function() return ZynxRampHelperDB.import.difficulty end,
+                                set = function(_, diffId) ZynxRampHelperDB.import.difficulty = diffId end
                             },
                             pasteDefault = {
                                 type = "execute",
@@ -649,8 +651,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 order = 4,
                                 multiline = 15,
                                 width = "full",
-                                set = function(_, val) HarreksRampHelperDB.import.importText = val end,
-                                get = function() return HarreksRampHelperDB.import.importText end,
+                                set = function(_, val) ZynxRampHelperDB.import.importText = val end,
+                                get = function() return ZynxRampHelperDB.import.importText end,
                                 validate = function(_, val)
                                     local containsToonName = string.find(val, UnitName("player"))
                                     if containsToonName then
@@ -676,12 +678,12 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 order = 6,
                                 width = defaultOptionWidth,
                                 func = function()
-                                    local fightId = HarreksRampHelperDB.import.fight
-                                    local diffId = HarreksRampHelperDB.import.difficulty
+                                    local fightId = ZynxRampHelperDB.import.fight
+                                    local diffId = ZynxRampHelperDB.import.difficulty
                                     if fightId and diffId then
                                         local diffSlug = ns.difficulties[diffId].slug
                                         local timingsString = ns:ConvertTimingsToNote(specName, diffSlug, fightId)
-                                        HarreksRampHelperDB.import.importText = timingsString
+                                        ZynxRampHelperDB.import.importText = timingsString
                                     end
                                 end
                             },
@@ -713,8 +715,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                             if importText ~= "" then
                                                 importedBossList = importedBossList .. ' - ' .. diffData.name .. ' ' .. fightData.name .. '\n'
                                                 local timers = ns:ConvertNoteToTable(importText, specName, fightId, diffSlug)
-                                                for type, timings in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
-                                                    HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
+                                                for type, timings in pairs(ZynxRampHelperDB[specName][diffSlug][tostring(fightId)]) do
+                                                    ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
                                                 end
                                                 for spell, timings in pairs(timers) do
                                                     local rampType = ns[specName]['cooldowns'][tonumber(spell)]
@@ -723,10 +725,10 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                                         for _, time in pairs(timings) do
                                                             timingsString = timingsString .. time .. '\n'
                                                         end
-                                                        HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] = (HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] or '') .. timingsString
+                                                        ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] = (ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][rampType] or '') .. timingsString
                                                     end
                                                 end
-                                                HarreksRampHelperDB.import.importText = '';
+                                                ZynxRampHelperDB.import.importText = '';
                                             end
                                         end
                                     end
@@ -747,9 +749,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
             for diffId, diff in pairs(ns.difficulties) do
                 local diffSlug = diff.slug
                 local diffName = diff.name
-                --Check HarreksRampHelperDB if this difficulty exists for this spec
-                if not HarreksRampHelperDB[specName][diffSlug] then
-                    HarreksRampHelperDB[specName][diffSlug] = {}
+                --Check ZynxRampHelperDB if this difficulty exists for this spec
+                if not ZynxRampHelperDB[specName][diffSlug] then
+                    ZynxRampHelperDB[specName][diffSlug] = {}
                 end
                 --Add the difficulty as a group to the specTable
                 specTable.args.fights.args[diffSlug] = {
@@ -761,17 +763,17 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                 }
                 --For each encounter in the data file
                 for encounterId, encounter in pairs(ns.bosses) do
-                    --Check HarreksRampHelperDB if this boss exists for this difficulty on this spec
-                    if not HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)] then
-                        HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)] = {}
+                    --Check ZynxRampHelperDB if this boss exists for this difficulty on this spec
+                    if not ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)] then
+                        ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)] = {}
                     end
                     --Local variable to store the ramp types
                     local rampTypeOptions = {}
                     --For each type of ramp in the data
                     for type, _ in pairs(rampTypes) do
-                        --Check HarreksRampHelperDB if this rampType exists on this boss for this difficulty on this spec
-                        if not HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] then
-                            HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] = ""
+                        --Check ZynxRampHelperDB if this rampType exists on this boss for this difficulty on this spec
+                        if not ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][type] then
+                            ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][type] = ""
                         end
                         --Add a multiline text input with the name of that ramp type
                         rampTypeOptions[diffSlug .. '-' .. encounterId ..'-' .. type] = {
@@ -780,8 +782,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             name = type,
                             desc = "Input the timings you will execute this ramp on, in the mm:ss format, each time in a new line",
                             width = "normal",
-                            set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] = val end,
-                            get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][type] end,
+                            set = function(_, val) ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][type] = val end,
+                            get = function() return ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][type] end,
                             validate = function(_, val)
                                 local valid = ns:IsValidTimingsText(val)
                                 if valid then
@@ -800,21 +802,21 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 order = 1,
                                 name = type,
                                 width = "normal",
-                                set = function(_, val) HarreksRampHelperDB[specName].testTimers[type] = val end,
-                                get = function() return HarreksRampHelperDB[specName].testTimers[type] end
+                                set = function(_, val) ZynxRampHelperDB[specName].testTimers[type] = val end,
+                                get = function() return ZynxRampHelperDB[specName].testTimers[type] end
                             }
                         end
                         --Add this ramp to the options
                         if not specSpells.args[type] then
-                            if not HarreksRampHelperDB.options.specs[specName][type] then
-                                HarreksRampHelperDB.options.specs[specName][type] = true
+                            if not ZynxRampHelperDB.options.specs[specName][type] then
+                                ZynxRampHelperDB.options.specs[specName][type] = true
                             end
                             specSpells.args[type] = {
                                 type = "toggle",
                                 name = type,
                                 order = rampsIndex,
-                                set = function(_, val) HarreksRampHelperDB.options.specs[specName][type] = val end,
-                                get = function() return HarreksRampHelperDB.options.specs[specName][type] end
+                                set = function(_, val) ZynxRampHelperDB.options.specs[specName][type] = val end,
+                                get = function() return ZynxRampHelperDB.options.specs[specName][type] end
                             }
                             rampsIndex = rampsIndex + 1
                         end
@@ -823,9 +825,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                     local cooldownOptions = {}
                     --For each cooldown in the data
                     for _, cooldown in pairs(cooldowns) do
-                        --Check HarreksRampHelperDB if this cooldown exists on this boss for this difficulty on this spec
-                        if not HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] then
-                            HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] = ""
+                        --Check ZynxRampHelperDB if this cooldown exists on this boss for this difficulty on this spec
+                        if not ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] then
+                            ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] = ""
                         end
                         --Add a multiline text input with the name of that cooldown
                         cooldownOptions[diffSlug .. '-' .. encounterId ..'-' .. cooldown] = {
@@ -834,8 +836,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             name = cooldown,
                             desc = "Input the timings you will use this cooldown on, in the mm:ss format, each time in a new line",
                             width = "normal",
-                            set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] = val end,
-                            get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] end,
+                            set = function(_, val) ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] = val end,
+                            get = function() return ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][cooldown] end,
                             validate = function(_, val)
                                 local valid = ns:IsValidTimingsText(val)
                                 if valid then
@@ -854,21 +856,21 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 order = 2,
                                 name = cooldown,
                                 width = "normal",
-                                set = function(_, val) HarreksRampHelperDB[specName].testTimers[cooldown] = val end,
-                                get = function() return HarreksRampHelperDB[specName].testTimers[cooldown] end
+                                set = function(_, val) ZynxRampHelperDB[specName].testTimers[cooldown] = val end,
+                                get = function() return ZynxRampHelperDB[specName].testTimers[cooldown] end
                             }
                         end
                         --Add this cooldown to the options
                         if not specSpells.args[cooldown] then
-                            if not HarreksRampHelperDB.options.specs[specName][cooldown] then
-                                HarreksRampHelperDB.options.specs[specName][cooldown] = true
+                            if not ZynxRampHelperDB.options.specs[specName][cooldown] then
+                                ZynxRampHelperDB.options.specs[specName][cooldown] = true
                             end
                             specSpells.args[cooldown] = {
                                 type = "toggle",
                                 name = cooldown,
                                 order = cooldownsIndex,
-                                set = function(_, val) HarreksRampHelperDB.options.specs[specName][cooldown] = val end,
-                                get = function() return HarreksRampHelperDB.options.specs[specName][cooldown] end
+                                set = function(_, val) ZynxRampHelperDB.options.specs[specName][cooldown] = val end,
+                                get = function() return ZynxRampHelperDB.options.specs[specName][cooldown] end
                             }
                             cooldownsIndex = cooldownsIndex + 1
                         end
@@ -877,9 +879,9 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                     local utilityOptions = {}
                     --For each utility in the data
                     for _, utility in pairs(utilities) do
-                        --Check HarreksRampHelperDB if this utility exists on this boss for this difficulty on this spec
-                        if not HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] then
-                            HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] = ""
+                        --Check ZynxRampHelperDB if this utility exists on this boss for this difficulty on this spec
+                        if not ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] then
+                            ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] = ""
                         end
                         --Add a multiline text input with the name of that cooldown
                         utilityOptions[diffSlug .. '-' .. encounterId ..'-' .. utility] = {
@@ -888,8 +890,8 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                             name = utility,
                             desc = "Input the timings you will use this spell on, in the mm:ss format, each time in a new line",
                             width = "normal",
-                            set = function(_, val) HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] = val end,
-                            get = function() return HarreksRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] end,
+                            set = function(_, val) ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] = val end,
+                            get = function() return ZynxRampHelperDB[specName][diffSlug][tostring(encounterId)][utility] end,
                             validate = function(_, val)
                                 local valid = ns:IsValidTimingsText(val)
                                 if valid then
@@ -908,21 +910,21 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
                                 order = 3,
                                 name = utility,
                                 width = "normal",
-                                set = function(_, val) HarreksRampHelperDB[specName].testTimers[utility] = val end,
-                                get = function() return HarreksRampHelperDB[specName].testTimers[utility] end
+                                set = function(_, val) ZynxRampHelperDB[specName].testTimers[utility] = val end,
+                                get = function() return ZynxRampHelperDB[specName].testTimers[utility] end
                             }
                         end
                         --Add this utility to the options
                         if not specSpells.args[utility] then
-                            if HarreksRampHelperDB.options.specs[specName][utility] == nil then
-                                HarreksRampHelperDB.options.specs[specName][utility] = true
+                            if ZynxRampHelperDB.options.specs[specName][utility] == nil then
+                                ZynxRampHelperDB.options.specs[specName][utility] = true
                             end
                             specSpells.args[utility] = {
                                 type = "toggle",
                                 name = utility,
                                 order = utilitiesIndex,
-                                set = function(_, val) HarreksRampHelperDB.options.specs[specName][utility] = val end,
-                                get = function() return HarreksRampHelperDB.options.specs[specName][utility] end
+                                set = function(_, val) ZynxRampHelperDB.options.specs[specName][utility] = val end,
+                                get = function() return ZynxRampHelperDB.options.specs[specName][utility] end
                             }
                             utilitiesIndex = utilitiesIndex + 1
                         end
@@ -1014,11 +1016,11 @@ addonLoader:SetScript("OnEvent", function(self, event, name)
             optionsTable.args.options.args.specOptions.args[specName] = specSpells
         end
 
-        LibStub("AceConfig-3.0"):RegisterOptionsTable("Harrek's Healer Ramp Helper", optionsTable)
-        local optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Harrek's Healer Ramp Helper", "Harrek's Ramp Helper")
-        SLASH_HARREKSRAMPHELPER1 = "/hrh"
+        LibStub("AceConfig-3.0"):RegisterOptionsTable("Zynx Ramp Helper", optionsTable)
+        local optionsFrame = LibStub("AceConfigDialog-3.0"):AddToBlizOptions("Zynx Ramp Helper", "Zynx Ramp Helper")
+        SLASH_ZYNXRAMPHELPER1 = "/zrh"
 
-        SlashCmdList.HARREKSRAMPHELPER = function(msg, editBox)
+        SlashCmdList.ZYNXRAMPHELPER = function(msg, editBox)
             local phase = msg:match("^%s*phase%s+(%d+%.?%d*)")
             if phase then
                 ns:StartPhaseManually(phase)

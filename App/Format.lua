@@ -193,7 +193,7 @@ end
 
 --Convert timings from the DB to a string with MRT format
 function ns:ConvertTimingsToNote(spec, diffSlug, fightId)
-    local timingsTable = HarreksRampHelperDB[spec][diffSlug][tostring(fightId)]
+    local timingsTable = ZynxRampHelperDB[spec][diffSlug][tostring(fightId)]
     local toonName = UnitName("player")
     local parsedTimingsTable = {}
     local orderedTable = {}

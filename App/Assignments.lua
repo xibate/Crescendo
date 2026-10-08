@@ -69,12 +69,12 @@ function ns:SetupTimings(event, encounterId, difficultyId)
     --Generate non-ramp assignment elements
     for id, spell in pairs(cooldownsTable) do
         local spellInfo = C_Spell.GetSpellInfo(id)
-        if HarreksRampHelperDB.options.specs[ns.specName][spell] and spellInfo and spellInfo.iconID then
+        if ZynxRampHelperDB.options.specs[ns.specName][spell] and spellInfo and spellInfo.iconID then
             assignmentsTable[spell] = {
                 {
                     ['text'] = spell .. ' Soon',
                     ['icon'] = spellInfo.iconID,
-                    ['offset'] = HarreksRampHelperDB.options.timerDuration,
+                    ['offset'] = ZynxRampHelperDB.options.timerDuration,
                     ['showTimer'] = true
                 },
                 {
@@ -87,12 +87,12 @@ function ns:SetupTimings(event, encounterId, difficultyId)
     end
     for id, spell in pairs(utilitiesTable) do
         local spellInfo = C_Spell.GetSpellInfo(id)
-        if HarreksRampHelperDB.options.specs[ns.specName][spell] and spellInfo and spellInfo.iconID then
+        if ZynxRampHelperDB.options.specs[ns.specName][spell] and spellInfo and spellInfo.iconID then
             assignmentsTable[spell] = {
                 {
                     ['text'] = spell .. ' Soon',
                     ['icon'] = spellInfo.iconID,
-                    ['offset'] = HarreksRampHelperDB.options.timerDuration,
+                    ['offset'] = ZynxRampHelperDB.options.timerDuration,
                     ['showTimer'] = true
                 },
                 {
@@ -105,10 +105,10 @@ function ns:SetupTimings(event, encounterId, difficultyId)
     end
     local noteAssignments = {}
     --If Read From Note mode is enabled, grab the current note text and format it
-    if event == "ENCOUNTER_START" and HarreksRampHelperDB.options.readFromNote then
+    if event == "ENCOUNTER_START" and ZynxRampHelperDB.options.readFromNote then
         local mrtNoteArray = {
-            HarreksRampHelperDB.options.readFromNote        and _G.VMRT.Note.Text1 or "",
-            HarreksRampHelperDB.options.mrtPersonalNote     and _G.VMRT.Note.SelfText or ""
+            ZynxRampHelperDB.options.readFromNote        and _G.VMRT.Note.Text1 or "",
+            ZynxRampHelperDB.options.mrtPersonalNote     and _G.VMRT.Note.SelfText or ""
         }
         local mrtNoteText = table.concat(mrtNoteArray, "\n")
                     :gsub("^%s+", "")
@@ -130,14 +130,14 @@ function ns:SetupTimings(event, encounterId, difficultyId)
         local fightTimings, savedTimings
         if event == "ENCOUNTER_START" then
             local difficultySlug = ns.difficulties[difficultyId]['slug']
-            savedTimings = HarreksRampHelperDB[ns.specName][difficultySlug][tostring(encounterId)][type]
-            if HarreksRampHelperDB.options.readFromNote then
+            savedTimings = ZynxRampHelperDB[ns.specName][difficultySlug][tostring(encounterId)][type]
+            if ZynxRampHelperDB.options.readFromNote then
                 fightTimings = noteAssignments[type]
             else
                 fightTimings = savedTimings
             end
-        elseif HarreksRampHelperDB.testing.testMode then
-            savedTimings = HarreksRampHelperDB[ns.specName].testTimers[type]
+        elseif ZynxRampHelperDB.testing.testMode then
+            savedTimings = ZynxRampHelperDB[ns.specName].testTimers[type]
             fightTimings = savedTimings
         end
         --Lines like '@Spectral Coils #2' are tied to a boss ability bar instead of a time, see BossMods.lua. These
@@ -173,7 +173,7 @@ end
 
 --In prerequisites only mode the final cooldown press of a ramp is left out
 function ns:ShouldUseAssignment(assignment)
-    return not HarreksRampHelperDB.options.preReqsOnly or assignment['preRequisite']
+    return not ZynxRampHelperDB.options.preReqsOnly or assignment['preRequisite']
 end
 
 --Copies one step of a ramp into an assignment that can be shown during the fight
@@ -234,7 +234,7 @@ end
 function ns:SetupPhaseChanges(phaseChangesTable)
     ns.phaseTimerData.phaseTriggerCounter = {}
     ns.phaseTimerData.phaseActivations = {}
-    --Since Midnight addons can't read the combat log, phases come from BigWigs/DBM stages (main.lua) or /hrh phase <number>
+    --Since Midnight addons can't read the combat log, phases come from BigWigs/DBM stages (main.lua) or /zrh phase <number>
     if not ns.combatLogAvailable then
         return
     end
@@ -248,14 +248,14 @@ end
 
 --Import the currently pasted note into the addon assignments for the selected boss on the given spec
 function ns:ImportNote(specName)
-    local fightId = HarreksRampHelperDB.import.fight
-    local diffId = HarreksRampHelperDB.import.difficulty
-    local importText = HarreksRampHelperDB.import.importText
+    local fightId = ZynxRampHelperDB.import.fight
+    local diffId = ZynxRampHelperDB.import.difficulty
+    local importText = ZynxRampHelperDB.import.importText
     if fightId and diffId and importText then
         local diffSlug = ns.difficulties[diffId].slug
         local timers = ns:ConvertNoteToTable(importText, specName, fightId, diffSlug)
-        for type, timings in pairs(HarreksRampHelperDB[specName][diffSlug][tostring(fightId)]) do
-            HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
+        for type, timings in pairs(ZynxRampHelperDB[specName][diffSlug][tostring(fightId)]) do
+            ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][type] = ns:KeepAbilityLines(timings)
         end
         local spellList = ns:GetFullSpellList(specName)
         for spell, timings in pairs(timers) do
@@ -265,10 +265,10 @@ function ns:ImportNote(specName)
                 for _, time in pairs(timings) do
                     timingsString = timingsString .. time .. '\n'
                 end
-                HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] = (HarreksRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] or '') .. timingsString
+                ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] = (ZynxRampHelperDB[specName][diffSlug][tostring(fightId)][selectedSpell] or '') .. timingsString
             end
         end
-        HarreksRampHelperDB.import.importText = '';
+        ZynxRampHelperDB.import.importText = '';
         ns:WriteOutput('Successfully imported ' .. specName .. ' timings for ' .. ns.difficulties[diffId].name .. ' ' .. ns.bosses[fightId].name)
     end
 end
@@ -284,15 +284,15 @@ end
 
 --Grabs the default assignments from the Defaults folder and pastes them in the import box
 function ns:PasteDefaultForSpecificBoss(specName)
-    local fightId = HarreksRampHelperDB.import.fight
-    local diffId = HarreksRampHelperDB.import.difficulty
+    local fightId = ZynxRampHelperDB.import.fight
+    local diffId = ZynxRampHelperDB.import.difficulty
     local diffSlug = ns.difficulties[diffId].slug
     local defaultText = ns:GetDefaultAssignments(specName, fightId, diffSlug)
     if defaultText == "" then
         ns:WriteOutput('There are currently no default assignments setup for ' .. specName .. ' on ' .. ns.difficulties[diffId].name .. ' ' .. ns.bosses[fightId].name)
     else
         defaultText = defaultText:gsub("PLAYER", GetUnitName("player", false))
-        HarreksRampHelperDB.import.importText = defaultText
+        ZynxRampHelperDB.import.importText = defaultText
         ns:WriteOutput('Pasted default assignments for ' .. specName .. ' on ' .. ns.difficulties[diffId].name .. ' ' .. ns.bosses[fightId].name)
     end
 end

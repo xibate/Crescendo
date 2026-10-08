@@ -61,9 +61,9 @@ function ns:RememberAbility(name, spellId)
     if not encounterId then
         return
     end
-    HarreksRampHelperDB.seenAbilities = HarreksRampHelperDB.seenAbilities or {}
-    HarreksRampHelperDB.seenAbilities[encounterId] = HarreksRampHelperDB.seenAbilities[encounterId] or {}
-    HarreksRampHelperDB.seenAbilities[encounterId][name] = spellId or true
+    ZynxRampHelperDB.seenAbilities = ZynxRampHelperDB.seenAbilities or {}
+    ZynxRampHelperDB.seenAbilities[encounterId] = ZynxRampHelperDB.seenAbilities[encounterId] or {}
+    ZynxRampHelperDB.seenAbilities[encounterId][name] = spellId or true
 end
 
 --A boss mod started a bar for an ability that lands in 'duration' seconds. If a timings line is tied to it, the steps of that ramp are scheduled from when it lands
@@ -194,7 +194,7 @@ function ns:GetAbilityHelpText(encounterId)
         "|cffffd100@1299010 #2|r  a spell id works instead of the name\n\n" ..
         "Steps that should start before the bar appears show as soon as it does, and the bar has to be enabled in your boss mod.\n\n" ..
         "|cffffd100Abilities seen on this boss|r\n"
-    local seen = HarreksRampHelperDB.seenAbilities and HarreksRampHelperDB.seenAbilities[encounterId]
+    local seen = ZynxRampHelperDB.seenAbilities and ZynxRampHelperDB.seenAbilities[encounterId]
     local names = {}
     for name, spellId in pairs(seen or {}) do
         table.insert(names, type(spellId) == 'number' and (name .. ' (' .. spellId .. ')') or name)

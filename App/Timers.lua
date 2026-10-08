@@ -54,7 +54,7 @@ function ns:StartPhase(phase)
     end)
 end
 
---Starts a phase from the /hrh phase <number> command, for when no boss mod is installed to report the phases
+--Starts a phase from the /zrh phase <number> command, for when no boss mod is installed to report the phases
 function ns:StartPhaseManually(phase)
     if not ns.mainTimerData.timerRunning then
         ns:WriteOutput('Phase ' .. phase .. ' can only be started during an encounter')

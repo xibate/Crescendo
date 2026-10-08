@@ -1,10 +1,10 @@
 ## Interface: 120100, 120105
-## Version: 2.0.3-midnight
-## Title: Harreks Healer Ramp Helper
-## IconTexture: Interface/Addons/HarreksHealerRampHelper/HRH_logo
-## Notes: Automatic reminder creator for ramp healers in raid
-## Author: Harrek
-## SavedVariables: HarreksRampHelperDB
+## Version: 1.0.0
+## Title: Zynx Ramp Helper
+## IconTexture: Interface/Addons/ZynxRampHelper/HRH_logo
+## Notes: Automatic reminder creator for ramp healers in raid. Based on Harrek's Healer Ramp Helper by Harrek
+## Author: Zynx (original addon by Harrek)
+## SavedVariables: ZynxRampHelperDB
 ## OptionalDeps: BigWigs, DBM-Core
 
 libs\LibStub.lua
