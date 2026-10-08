@@ -1,9 +1,9 @@
 ## Interface: 120100, 120105
 ## Version: 1.0.0
 ## Title: Zynx Ramp Helper
-## IconTexture: Interface/Addons/ZynxRampHelper/HRH_logo
-## Notes: Automatic reminder creator for ramp healers in raid. Based on Harrek's Healer Ramp Helper by Harrek
-## Author: Zynx (original addon by Harrek)
+## IconTexture: Interface/Addons/ZynxRampHelper/Media/logo
+## Notes: Automatic reminder creator for ramp healers in raid
+## Author: Zynx
 ## SavedVariables: ZynxRampHelperDB
 ## OptionalDeps: BigWigs, DBM-Core
 
@@ -12,21 +12,23 @@ libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 libs\AceGUI-3.0\AceGUI-3.0.xml
 libs\AceConfig-3.0\AceConfig-3.0.xml
 
-Config\RestoDruid.lua
-Config\Discipline.lua
-Config\HolyPriest.lua
-Config\HolyPaladin.lua
-Config\Preservation.lua
-Config\RestoShaman.lua
 Config\Data.lua
+Config\Specs\Discipline.lua
+Config\Specs\HolyPaladin.lua
+Config\Specs\HolyPriest.lua
+Config\Specs\Preservation.lua
+Config\Specs\RestoDruid.lua
+Config\Specs\RestoShaman.lua
 
-Defaults\Preservation.lua
+Core\Util.lua
+Core\Database.lua
+Core\Spec.lua
+Core\Timings.lua
+Core\Plan.lua
+Core\Fight.lua
+Core\BossMods.lua
 
-App\Options.lua
-App\Assignments.lua
-App\Display.lua
-App\Format.lua
-App\Timers.lua
-App\BossMods.lua
+UI\Display.lua
+UI\Options.lua
 
 main.lua

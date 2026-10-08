@@ -1,22 +1,19 @@
 local _, ns = ...
 
-ns['HolyPaladin'] = {
-    ['spells'] = {
-    },
-    ['cooldowns'] = {
+ns.specData['HolyPaladin'] = {
+    spells = {},
+    cooldowns = {
         [31884] = 'Avenging Wrath',
         [31821] = 'Aura Mastery'
     },
-    ['utilities'] = {
+    utilities = {
         [395355] = 'Blessing of the Seasons',
         [6940] = 'Blessing of Sacrifice',
         [1044] = 'Blessing of Freedom',
         [1022] = 'Blessing of Protection'
     },
-    ['ramps'] = {
-    }
+    ramps = {},
+    rampSteps = function()
+        return {}
+    end
 }
-
-ns['HolyPaladin']['rampTypes'] = function()
-    return {}
-end

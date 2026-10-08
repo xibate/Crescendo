@@ -1,21 +1,31 @@
---[[Initialization]]--
 local _, ns = ...
 
 --Since Midnight addons can't read the combat log, but BigWigs and DBM still work out the boss stages and ability timers
 --from Blizzard's encounter timeline and share them with other addons. Phases follow their stages, and the '@ability'
---lines in the timings follow the bars they show for the boss abilities
-ns.abilityAnchors = {}
-ns.abilityTimings = {}
-ns.barSource = nil
+--lines in the timings follow the bars they show for the boss abilities.
 
---Boss mods usually handle the pull before this addon starts its fight timer, so what they send in the seconds before is kept and replayed once it starts
+--Ability lines of the current fight (see ParseAbilityAnchors), each with the ramp or spell name it belongs to as 'entry'
+ns.abilityAnchors = {}
+--Reminders tied to a boss mod bar, by bar id: { anchors, landsAt, reminders, shown } with reminder times in GetTime() seconds
+local abilityTimings = {}
+--The boss mod followed this fight, the first one to show a matching bar
+local barSource = nil
+
+function ns:ResetAbilityTimings()
+    abilityTimings = {}
+    barSource = nil
+end
+
+--Boss mods usually handle the pull before this addon starts its fight, so what they send in the seconds before is kept
+--and replayed once it starts
 local earlyEvents = {}
+
 local function KeepForFightStart(replay)
     local now = GetTime()
-    while earlyEvents[1] and now - earlyEvents[1]['time'] > 5 do
+    while earlyEvents[1] and now - earlyEvents[1].time > 5 do
         table.remove(earlyEvents, 1)
     end
-    table.insert(earlyEvents, { ['time'] = now, ['replay'] = replay })
+    table.insert(earlyEvents, { time = now, replay = replay })
 end
 
 function ns:ReplayEarlyBossModEvents()
@@ -23,27 +33,26 @@ function ns:ReplayEarlyBossModEvents()
     local events = earlyEvents
     earlyEvents = {}
     for _, event in ipairs(events) do
-        if now - event['time'] <= 5 then
-            event['replay'](now - event['time'])
+        if now - event.time <= 5 then
+            event.replay(now - event.time)
         end
     end
 end
 
---Starts a phase when BigWigs or DBM report a stage change. Both can be installed, so a stage we are already in is ignored
+--A boss mod reported a stage. With both installed the second report of the same stage is ignored
 function ns:StartPhaseFromBossMod(stage)
     if ns:IsSecret(stage) or not tonumber(stage) then
         return
     end
-    if not ns.mainTimerData.timerRunning then
+    if not ns.fight.running then
         KeepForFightStart(function()
             ns:StartPhaseFromBossMod(stage)
         end)
         return
     end
-    if ns.phaseTimerData.currentPhase == ns:PhaseKey(stage) then
-        return
+    if ns.fight.phase ~= ns:PhaseKey(stage) then
+        ns:StartPhase(stage)
     end
-    ns:StartPhase(stage)
 end
 
 --Bar texts look like 'Spectral Coils (2)', the number is the cast count the boss mod shows
@@ -55,18 +64,50 @@ local function SplitBarText(text)
     return text, nil
 end
 
---Remembers the abilities the boss mods showed bars for, so they can be listed in the options of that boss
-function ns:RememberAbility(name, spellId)
-    local encounterId = ns.currentEncounterId
-    if not encounterId then
-        return
+--Remembers the abilities the boss mods showed bars for, so the options can list them for that boss
+local function RememberAbility(name, spellId)
+    local encounterId = ns.fight.encounterId
+    if encounterId then
+        ns.db.seenAbilities[encounterId] = ns.db.seenAbilities[encounterId] or {}
+        ns.db.seenAbilities[encounterId][name] = spellId or true
     end
-    ZynxRampHelperDB.seenAbilities = ZynxRampHelperDB.seenAbilities or {}
-    ZynxRampHelperDB.seenAbilities[encounterId] = ZynxRampHelperDB.seenAbilities[encounterId] or {}
-    ZynxRampHelperDB.seenAbilities[encounterId][name] = spellId or true
 end
 
---A boss mod started a bar for an ability that lands in 'duration' seconds. If a timings line is tied to it, the steps of that ramp are scheduled from when it lands
+local function MatchingAnchors(name, spellId, count)
+    local matches = {}
+    for _, anchor in ipairs(ns.abilityAnchors) do
+        local sameAbility = (anchor.spellId and anchor.spellId == spellId) or anchor.name == name:lower()
+        if sameAbility and (not anchor.counts or (count and anchor.counts[count])) then
+            table.insert(matches, anchor)
+        end
+    end
+    return matches
+end
+
+--Creates the reminders of the ramps tied to one bar, timed so they land when the ability does. Starting the same bar
+--again moves them, without repeating the ones already shown
+local function ScheduleAbilityTiming(barId, anchors, landsAt)
+    local previous = abilityTimings[barId]
+    local timing = {
+        anchors = anchors,
+        landsAt = landsAt,
+        shown = previous and previous.shown or {},
+        reminders = {}
+    }
+    for anchorIndex, anchor in ipairs(anchors) do
+        for stepIndex, step in ipairs(ns.steps[anchor.entry] or {}) do
+            if ns:ShouldUseStep(step) then
+                local reminder = ns:CreateReminder(step, landsAt + anchor.shift - step.offset)
+                reminder.key = anchorIndex .. '-' .. stepIndex
+                reminder.shown = timing.shown[reminder.key] or false
+                table.insert(timing.reminders, reminder)
+            end
+        end
+    end
+    abilityTimings[barId] = timing
+end
+
+--A boss mod started a bar for an ability that lands in 'duration' seconds
 function ns:OnBossModBar(source, barKey, text, duration, spellId, count)
     --Bars the boss mods copy straight from Blizzard's timeline can hold secret values, those can't be used
     if ns:IsSecret(barKey) or ns:IsSecret(text) or ns:IsSecret(duration) or ns:IsSecret(spellId) or ns:IsSecret(count) then
@@ -75,54 +116,24 @@ function ns:OnBossModBar(source, barKey, text, duration, spellId, count)
     if type(text) ~= 'string' or not tonumber(duration) then
         return
     end
-    if not ns.mainTimerData.timerRunning then
+    if not ns.fight.running then
         KeepForFightStart(function(elapsed)
             ns:OnBossModBar(source, barKey, text, tonumber(duration) - elapsed, spellId, count)
         end)
         return
     end
     local name, barCount = SplitBarText(text)
-    count = tonumber(count) or barCount
     spellId = tonumber(spellId)
-    ns:RememberAbility(name, spellId)
-    --With both BigWigs and DBM installed, only the first one that shows a bar we use is followed, otherwise every ramp shows twice
-    if ns.barSource and ns.barSource ~= source then
+    RememberAbility(name, spellId)
+    --With both BigWigs and DBM installed only one is followed, otherwise every reminder shows twice
+    if barSource and barSource ~= source then
         return
     end
-    local matches = {}
-    for _, anchor in ipairs(ns.abilityAnchors) do
-        local sameAbility = (anchor['spellId'] and anchor['spellId'] == spellId) or anchor['name'] == name:lower()
-        if sameAbility and (not anchor['counts'] or (count and anchor['counts'][count])) then
-            table.insert(matches, anchor)
-        end
-    end
+    local matches = MatchingAnchors(name, spellId, tonumber(count) or barCount)
     if #matches > 0 then
-        ns.barSource = source
-        ns:ScheduleAbilityTiming(source .. ':' .. tostring(barKey), matches, GetTime() + tonumber(duration))
+        barSource = source
+        ScheduleAbilityTiming(source .. ':' .. tostring(barKey), matches, GetTime() + tonumber(duration))
     end
-end
-
---Creates the reminders for the ramps tied to one bar. Starting the same bar again moves them, without repeating the ones already shown
-function ns:ScheduleAbilityTiming(barId, anchors, landsAt)
-    local previous = ns.abilityTimings[barId]
-    local timing = {
-        ['anchors'] = anchors,
-        ['landsAt'] = landsAt,
-        ['shown'] = previous and previous['shown'] or {},
-        ['items'] = {}
-    }
-    for anchorIndex, anchor in ipairs(anchors) do
-        for stepIndex, step in ipairs(ns.assignmentsTable[anchor['type']] or {}) do
-            if ns:ShouldUseAssignment(step) then
-                local item = ns:CreateAssignment(step)
-                item['at'] = landsAt + anchor['shift'] - step['offset']
-                item['key'] = anchorIndex .. '-' .. stepIndex
-                item['loaded'] = timing['shown'][item['key']] or false
-                table.insert(timing['items'], item)
-            end
-        end
-    end
-    ns.abilityTimings[barId] = timing
 end
 
 --DBM changed the time left on a bar
@@ -130,61 +141,50 @@ function ns:OnBossModBarUpdate(source, barKey, remaining)
     if ns:IsSecret(barKey) or ns:IsSecret(remaining) or not tonumber(remaining) then
         return
     end
-    if not ns.mainTimerData.timerRunning then
+    if not ns.fight.running then
         KeepForFightStart(function(elapsed)
             ns:OnBossModBarUpdate(source, barKey, tonumber(remaining) - elapsed)
         end)
         return
     end
     local barId = source .. ':' .. tostring(barKey)
-    local timing = ns.abilityTimings[barId]
-    if timing then
-        ns:ScheduleAbilityTiming(barId, timing['anchors'], GetTime() + tonumber(remaining))
+    if abilityTimings[barId] then
+        ScheduleAbilityTiming(barId, abilityTimings[barId].anchors, GetTime() + tonumber(remaining))
     end
 end
 
---A bar was stopped. That also happens when the ability goes off, so the reminders due in the next second still show
+--A bar was stopped. That also happens when the ability goes off, so reminders due within a second still show
 function ns:OnBossModBarStop(source, barKey)
     if ns:IsSecret(barKey) then
         return
     end
-    if not ns.mainTimerData.timerRunning then
+    if not ns.fight.running then
         KeepForFightStart(function()
             ns:OnBossModBarStop(source, barKey)
         end)
         return
     end
     local barId = source .. ':' .. tostring(barKey)
-    local timing = ns.abilityTimings[barId]
-    if timing and timing['landsAt'] - GetTime() > 1 then
-        ns.abilityTimings[barId] = nil
+    local timing = abilityTimings[barId]
+    if timing and timing.landsAt - GetTime() > 1 then
+        abilityTimings[barId] = nil
     end
 end
 
---Called by the fight timer, shows the reminders tied to boss abilities that are due. Steps that should have started before the bar appeared show right away
-function ns:RunAbilityTimings()
-    local now = GetTime()
-    for _, timing in pairs(ns.abilityTimings) do
-        for _, item in ipairs(timing['items']) do
-            if not item['loaded'] then
-                local timeLeft = item['at'] - now
-                local due
-                if item['dynamic'] then
-                    due = timeLeft >= 0 and ns:ShouldShowDynamic(item, timeLeft)
-                else
-                    due = timeLeft <= 0
-                end
-                if due then
-                    item['loaded'] = true
-                    timing['shown'][item['key']] = true
-                    ns:ShowAssignment(item)
-                end
+--Shows the reminders tied to boss abilities that are due. Steps that should have started before the bar appeared show right away
+function ns:ShowDueAbilityReminders(now)
+    for _, timing in pairs(abilityTimings) do
+        for _, reminder in ipairs(timing.reminders) do
+            if not reminder.shown and ns:IsDue(reminder, reminder.at - now) then
+                reminder.shown = true
+                timing.shown[reminder.key] = true
+                ns:ShowReminder(reminder)
             end
         end
     end
 end
 
---Explanation and list of known abilities for the Boss Abilities tab of a boss in the options
+--Explanation and the abilities seen on a boss, for the Boss Abilities tab in the options
 function ns:GetAbilityHelpText(encounterId)
     local text = "Instead of a time, a timings line can follow a boss ability that BigWigs or DBM shows a bar for. The ramp is timed so " ..
         "its last step lands when the ability does.\n\n" ..
@@ -194,9 +194,8 @@ function ns:GetAbilityHelpText(encounterId)
         "|cffffd100@1299010 #2|r  a spell id works instead of the name\n\n" ..
         "Steps that should start before the bar appears show as soon as it does, and the bar has to be enabled in your boss mod.\n\n" ..
         "|cffffd100Abilities seen on this boss|r\n"
-    local seen = ZynxRampHelperDB.seenAbilities and ZynxRampHelperDB.seenAbilities[encounterId]
     local names = {}
-    for name, spellId in pairs(seen or {}) do
+    for name, spellId in pairs(ns.db.seenAbilities[encounterId] or {}) do
         table.insert(names, type(spellId) == 'number' and (name .. ' (' .. spellId .. ')') or name)
     end
     if #names == 0 then
