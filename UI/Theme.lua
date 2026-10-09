@@ -224,13 +224,13 @@ end
 local menu
 function ns:OpenMenu(anchor, items, onSelect)
     if not menu then
-        menu = CreateFrame("Frame", "ZynxRampHelperMenu", UIParent)
+        menu = CreateFrame("Frame", "CrescendoMenu", UIParent)
         menu:SetFrameStrata("FULLSCREEN_DIALOG")
         menu:EnableMouse(true)
         ns:Fill(menu, theme.window)
         ns:Border(menu, theme.borderStrong)
         menu.rows = {}
-        table.insert(UISpecialFrames, "ZynxRampHelperMenu")
+        table.insert(UISpecialFrames, "CrescendoMenu")
     end
     local width = math.max(anchor:GetWidth() or 180, 180)
     for _, row in ipairs(menu.rows) do

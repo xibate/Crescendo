@@ -1,12 +1,12 @@
 ## Interface: 120100, 120105
-## Version: 2.1.0
-## Title: Zynx Ramp Helper
-## IconTexture: Interface/Addons/ZynxRampHelper/Media/logo
-## Notes: Automatic reminder creator for ramp healers in raid
+## Version: 3.0.0
+## Title: Crescendo
+## IconTexture: Interface/Addons/Crescendo/Media/logo
+## Notes: Plans and reminders for healer ramps and cooldowns in raid
 ## Author: Zynx
-## SavedVariables: ZynxRampHelperDB
+## SavedVariables: CrescendoDB, ZynxRampHelperDB
 ## OptionalDeps: BigWigs, DBM-Core, EllesmereUI
-## AddonCompartmentFunc: ZynxRampHelper_OnAddonCompartmentClick
+## AddonCompartmentFunc: Crescendo_OnAddonCompartmentClick
 
 Config\Bosses.lua
 Config\Specs.lua
@@ -16,6 +16,7 @@ Core\Util.lua
 Core\Database.lua
 Core\Spec.lua
 Core\Ramps.lua
+Core\Trinkets.lua
 Core\PlanText.lua
 Core\Plan.lua
 Core\Fight.lua

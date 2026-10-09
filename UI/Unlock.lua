@@ -64,7 +64,7 @@ end
 
 --The box over the first reminder, dragged to move them all
 local function CreateMover()
-    mover = CreateFrame("Button", "ZynxRampHelperMover", UIParent)
+    mover = CreateFrame("Button", "CrescendoMover", UIParent)
     mover:SetFrameStrata("TOOLTIP")
     mover:SetFrameLevel(100)
     mover:SetMovable(true)
@@ -120,7 +120,7 @@ local function Nudge(dx, dy)
 end
 
 local function CreateToolbar()
-    toolbar = CreateFrame("Frame", "ZynxRampHelperUnlockBar", UIParent)
+    toolbar = CreateFrame("Frame", "CrescendoUnlockBar", UIParent)
     toolbar:SetSize(640, 40)
     toolbar:SetPoint("TOP", 0, -120)
     toolbar:SetFrameStrata("TOOLTIP")
@@ -195,7 +195,7 @@ local function CreateToolbar()
 end
 
 local function CreateOverlay()
-    overlay = CreateFrame("Frame", "ZynxRampHelperUnlock", UIParent)
+    overlay = CreateFrame("Frame", "CrescendoUnlock", UIParent)
     overlay:SetAllPoints(UIParent)
     overlay:SetFrameStrata("BACKGROUND")
     ns:Fill(overlay, { 0, 0, 0, 0.45 })
@@ -212,7 +212,7 @@ local function CreateOverlay()
             ns:SetUnlocked(false)
         end
     end)
-    table.insert(UISpecialFrames, "ZynxRampHelperUnlock")
+    table.insert(UISpecialFrames, "CrescendoUnlock")
     CreateMover()
     CreateToolbar()
 end

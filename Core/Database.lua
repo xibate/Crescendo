@@ -168,10 +168,15 @@ end
 
 --Creates the saved settings or fills in what is missing. Only nil is replaced, so options turned off stay off
 function ns:InitDatabase()
-    if type(ZynxRampHelperDB) ~= 'table' then
-        ZynxRampHelperDB = {}
+    --The addon was called Zynx Ramp Helper before, its settings move over once
+    if type(CrescendoDB) ~= 'table' and type(ZynxRampHelperDB) == 'table' then
+        CrescendoDB = ZynxRampHelperDB
     end
-    local db = ZynxRampHelperDB
+    ZynxRampHelperDB = nil
+    if type(CrescendoDB) ~= 'table' then
+        CrescendoDB = {}
+    end
+    local db = CrescendoDB
     for group, values in pairs(defaults) do
         if type(db[group]) ~= 'table' then
             db[group] = {}

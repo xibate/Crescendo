@@ -42,7 +42,7 @@ function ns:StartPhase(phase)
     ns.fight.phaseStart = GetTime()
 end
 
---Starts a phase from the /zrh phase <number> command, for when no boss mod is installed to report the phases
+--Starts a phase from the /cres phase <number> command, for when no boss mod is installed to report the phases
 function ns:StartPhaseManually(phase)
     if not ns.fight.running then
         ns:WriteOutput('Phase ' .. phase .. ' can only be started during an encounter')

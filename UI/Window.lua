@@ -1,6 +1,6 @@
 local _, ns = ...
 
---The addon's window (/zrh): a header with the pages (Plans, Ramps, Display) and a page below it. Pages register with
+--The addon's window (/cres): a header with the pages (Plans, Ramps, Display) and a page below it. Pages register with
 --ns:RegisterPage and are built the first time they show
 
 local theme = ns.theme
@@ -70,7 +70,7 @@ function ns:SetPageTestHandler(key, handler)
 end
 
 local function CreateWindow()
-    local frame = CreateFrame("Frame", "ZynxRampHelperWindow", UIParent)
+    local frame = CreateFrame("Frame", "CrescendoWindow", UIParent)
     frame:SetSize(WIDTH, HEIGHT)
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
@@ -87,14 +87,14 @@ local function CreateWindow()
     frame:SetScript("OnHide", function()
         ns:CloseMenu()
     end)
-    table.insert(UISpecialFrames, "ZynxRampHelperWindow")
+    table.insert(UISpecialFrames, "CrescendoWindow")
     ns:Fill(frame, theme.window)
     ns:Border(frame, theme.border)
     window = { frame = frame, nav = {}, pageFrames = {} }
 
     local title = ns:Text(frame, 15)
     title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Zynx Ramp Helper")
+    title:SetText("Crescendo")
     title:SetTextColor(ns:GetAccent())
 
     local x = 190
@@ -199,29 +199,31 @@ local function AddSettingsEntry()
     local panel = CreateFrame("Frame")
     local text = ns:Text(panel, 13)
     text:SetPoint("TOPLEFT", 16, -16)
-    text:SetText("Plans, ramps and display settings are in the addon's own window. Type /zrh to open it.")
-    local open = ns:Button(panel, "Open Zynx Ramp Helper", 200, 28, function()
+    text:SetText("Plans, ramps and display settings are in the addon's own window. Type /cres to open it.")
+    local open = ns:Button(panel, "Open Crescendo", 200, 28, function()
         if SettingsPanel and SettingsPanel:IsShown() then
             HideUIPanel(SettingsPanel)
         end
         ns:OpenWindow()
     end, true)
     open:SetPoint("TOPLEFT", 16, -44)
-    local category = Settings.RegisterCanvasLayoutCategory(panel, "Zynx Ramp Helper")
+    local category = Settings.RegisterCanvasLayoutCategory(panel, "Crescendo")
     Settings.RegisterAddOnCategory(category)
 end
 
 --The addon's button in the game's addon menu on the minimap
-function ZynxRampHelper_OnAddonCompartmentClick()
+function Crescendo_OnAddonCompartmentClick()
     ns:ToggleWindow()
 end
 
---/zrh opens the window, /zrh ramps or /zrh display a page, /zrh unlock moves the reminders, /zrh phase 2 starts stage 2
---without a boss mod and /zrh stop stops a test
+--/cres opens the window, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres phase 2 starts stage 2
+--without a boss mod and /cres stop stops a test
 function ns:SetUpCommands()
     AddSettingsEntry()
-    SLASH_ZYNXRAMPHELPER1 = "/zrh"
-    SlashCmdList.ZYNXRAMPHELPER = function(message)
+    SLASH_CRESCENDO1 = "/cres"
+    SLASH_CRESCENDO2 = "/crescendo"
+    SLASH_CRESCENDO3 = "/zrh"
+    SlashCmdList.CRESCENDO = function(message)
         local command = message:match("^%s*(%S*)"):lower()
         local phase = message:match("^%s*phase%s+(%d+%.?%d*)")
         if phase then

@@ -49,7 +49,7 @@ end)
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
 loader:SetScript("OnEvent", function(_, _, addonName)
-    if addonName == "ZynxRampHelper" then
+    if addonName == "Crescendo" then
         ns:InitDatabase()
         ns:SetUpCommands()
     end

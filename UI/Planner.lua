@@ -178,11 +178,11 @@ end
 local function DescribeAssignment(assignment)
     local entry = assignment.entry or ''
     if not entry:find('%S') then
-        return "Pick a ramp or spell", false
+        return "Pick a ramp, spell or trinket", false
     end
     local schedule = AssignmentSchedule(assignment)
     if not schedule then
-        return "Not a ramp or a spell you know", true
+        return "Not a ramp, a spell you know or an equipped trinket", true
     end
     local before = assignment.before or 0
     local text = "Lands " .. TimingText(before) .. " " .. CastsText(assignment.casts)
@@ -212,6 +212,8 @@ local function AssignmentTooltip(tooltip, assignment)
     end
     if ns:FindRamp(ns:SelectedSpec(), assignment.entry) then
         tooltip:AddLine("The steps come from the ramp, change them on the Ramps page. Steps counted in global cooldowns use your haste.", 0.7, 0.7, 0.7, true)
+    elseif ns:FindTrinket(assignment.entry) then
+        tooltip:AddLine("A trinket gets a countdown first, its length is set on the Display page.", 0.7, 0.7, 0.7, true)
     else
         tooltip:AddLine("A spell gets a countdown first, its length is set on the Display page.", 0.7, 0.7, 0.7, true)
     end
@@ -482,6 +484,16 @@ local function EntryMenuItems(specKey)
             table.insert(items, { text = info.name, value = info.name, icon = info.iconID })
         end
     end
+    table.insert(items, { text = "Trinkets", header = true })
+    local trinkets = ns:GetEquippedTrinkets()
+    for _, trinket in ipairs(trinkets) do
+        if trinket.spellId and trinket.name then
+            table.insert(items, { text = trinket.name, value = trinket.name, icon = trinket.icon })
+        end
+    end
+    for index, slot in ipairs({ "top", "bottom" }) do
+        table.insert(items, { text = "Trinket " .. index .. " (" .. slot .. " slot, whatever is equipped)", value = "Trinket " .. index, icon = GetInventoryItemTexture("player", 12 + index) })
+    end
     return items
 end
 
@@ -505,7 +517,7 @@ local function AssignmentRow(index)
         Refresh(true)
     end)
     row.entry:SetPoint("TOPLEFT", COLUMNS.entry, 0)
-    row.entry:SetPlaceholder("ramp or spell")
+    row.entry:SetPlaceholder("ramp, spell or trinket")
     row.menu = ns:Button(row, "v", 26, 26, function()
         ns:OpenMenu(row.entry, EntryMenuItems(ns:SelectedSpec()), function(value)
             row.assignment.entry = value
@@ -514,7 +526,7 @@ local function AssignmentRow(index)
         end)
     end)
     row.menu:SetPoint("TOPLEFT", COLUMNS.menu, 0)
-    ns:Tooltip(row.menu, "Pick a ramp or cooldown")
+    ns:Tooltip(row.menu, "Pick a ramp, cooldown or trinket")
     row.before = ns:EditBox(row, COLUMNS.delete - COLUMNS.before - 8, 26, function(text)
         row.assignment.before = tonumber(text) or 0
         SaveAssignments()
@@ -574,7 +586,7 @@ local function BuildAssignmentsTab(panel)
 
     local headers = {
         { "Which casts", COLUMNS.casts, CASTS_HELP },
-        { "Ramp or spell", COLUMNS.entry },
+        { "Ramp, spell or trinket", COLUMNS.entry },
         { "Sec before", COLUMNS.before, BEFORE_HELP }
     }
     for _, header in ipairs(headers) do
@@ -773,7 +785,7 @@ local function RefreshAssignments(ability, keepRows)
         (ability.spellId and ("spell id " .. ability.spellId) or "matched by name"))
     planner.addButton:Show()
     if #planner.assignments == 0 then
-        planner.empty:SetText("Nothing assigned to " .. name .. " yet. Add a ramp or cooldown to land before it.")
+        planner.empty:SetText("Nothing assigned to " .. name .. " yet. Add a ramp, cooldown or trinket to land before it.")
         planner.empty:Show()
     else
         planner.empty:Hide()

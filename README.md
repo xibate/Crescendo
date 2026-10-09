@@ -1,14 +1,16 @@
-# Zynx Ramp Helper
+# Crescendo
 
 A World of Warcraft addon that reminds healers of every step of their raid ramps. Write a plan per boss with when each ramp or cooldown should land, and the addon shows and speaks the steps leading up to it. Built for Midnight (patch 12.1, The Venomous Abyss).
 
 ## Installing
 
-Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it exactly `ZynxRampHelper`, otherwise WoW won't load it.
+Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it exactly `Crescendo`, otherwise WoW won't load it.
+
+Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelper` folder, and to keep your plans and ramps rename `WTF/Account/<account>/SavedVariables/ZynxRampHelper.lua` to `Crescendo.lua` while the game is closed. Crescendo moves them over at the next login.
 
 ## The window
 
-`/zrh` (or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. It has three pages: Plans, Ramps and Display. `/zrh ramps` and `/zrh display` open a page directly, `/zrh stop` stops a test.
+`/cres` (or `/crescendo`, `/zrh`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. It has three pages: Plans, Ramps and Display. `/cres ramps` and `/cres display` open a page directly, `/cres stop` stops a test.
 
 ### Plans
 
@@ -16,7 +18,7 @@ Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it ex
 2. In the middle, pick one of the boss's abilities. Hover one for its spell tooltip, its stage and what is assigned to it. The number next to an ability is how many ramps or spells are assigned to it. Abilities your boss mod showed bars for, and ones named only in the plan, are listed below the boss's own.
 3. On the right, add an assignment:
    - **Which casts**: empty for every cast, or the casts it is for like `2,4`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
-   - **Ramp or spell**: type it, or pick it from the menu of your ramps and cooldowns.
+   - **Ramp, spell or trinket**: type it, or pick it from the menu of your ramps, cooldowns and equipped on-use trinkets.
    - **Sec before**: how many seconds before the ability the ramp lands (its last step) or the spell is cast.
 
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
@@ -29,7 +31,7 @@ Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bar
 
 ### Ramps and Display
 
-The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show. **Unlock** (or `/zrh unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, the reminder options and reading MRT notes.
+The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show. **Unlock** (or `/cres unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, the reminder options and reading MRT notes.
 
 ## Plans
 
@@ -52,9 +54,9 @@ Each spec, difficulty and boss has a plan, which the Plan text tab edits. One li
 | `@Spectral Coils #2 -3` | 3 seconds before the ability, `+3` is after |
 | `@1299010 #2` | a spell id instead of the ability name |
 
-A name is either a ramp from the Ramps page, or any spell by name or spell id, which gets a countdown and a reminder at its time.
+A name is a ramp from the Ramps page, any spell by name or spell id, or a trinket, which get a countdown and a reminder at their time. A trinket is named by its item name when it is equipped, `Trinket 1` or `Trinket 2` for whatever is in the top or bottom trinket slot at the pull, or `item:<id>`. MRT notes name trinkets by the spell of their use effect, which works both ways for equipped trinkets.
 
-- Phases follow the stages BigWigs or DBM detect. Without a boss mod, start a phase with `/zrh phase 2` from a macro. When a boss returns to a stage, its reminders run again.
+- Phases follow the stages BigWigs or DBM detect. Without a boss mod, start a phase with `/cres phase 2` from a macro. When a boss returns to a stage, its reminders run again.
 - Ability lines follow the bars BigWigs or DBM show. A ramp is timed so its last step lands with the ability, and moves when the boss mod corrects the bar. Steps that should have started before the bar appeared show as soon as it does. The Plans page lists the abilities your boss mod showed on each boss. With both boss mods installed, the first one to show a matching bar is followed for that pull.
 - An MRT note can be pasted on the MRT note tab to take your times from it, and a plan can be copied out as note lines. With the MRT options on the Display page, the times are read from your active notes at the pull instead. Ability lines stay in the plan either way.
 - When a pull starts on a raid boss that isn't in [Config/Bosses.lua](Config/Bosses.lua), its encounter id is printed in chat.
@@ -92,6 +94,6 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 | Folder | Contents |
 | --- | --- |
 | [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities, from BigWigs |
-| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
-| [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/zrh`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages, `Unlock.lua` moving the reminders |
+| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
+| [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/cres`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages, `Unlock.lua` moving the reminders |
 | `main.lua` | Starts and stops the fight on encounter events |

@@ -229,6 +229,10 @@ local function EntryForSpell(specKey, spellId)
             return name
         end
     end
+    local trinket = ns:TrinketEntryForSpell(spellId)
+    if trinket then
+        return trinket
+    end
     local info = C_Spell.GetSpellInfo(spellId)
     return info and info.name
 end
@@ -285,8 +289,9 @@ function ns:PlanToNote(planText, specKey)
     local entries = {}
     for _, timing in ipairs(ns:ParsePlan(planText).times) do
         local ramp = ns:FindRamp(specKey, timing.entry)
-        local info = not ramp and C_Spell.GetSpellInfo(tonumber(timing.entry) or timing.entry)
-        local spellId = ramp and ramp.spellId or info and info.spellID
+        local trinket = not ramp and ns:FindTrinket(timing.entry)
+        local info = not ramp and not trinket and C_Spell.GetSpellInfo(tonumber(timing.entry) or timing.entry)
+        local spellId = ramp and ramp.spellId or trinket and trinket.spellId or info and info.spellID
         if spellId then
             local phase = timing.phase ~= 'main' and (',p' .. timing.phase) or ''
             table.insert(entries, {

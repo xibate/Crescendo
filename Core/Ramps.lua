@@ -146,8 +146,9 @@ function ns:GetMaxCharges(spell)
     return ns.maxCharges[spell] or 2
 end
 
---The reminder steps of a plan entry, with offsets in seconds before the entry's time. A ramp gives its steps, any other
---spell (by name or id) a countdown and a reminder at its time. Nil when the name is neither
+--The reminder steps of a plan entry, with offsets in seconds before the entry's time. A ramp gives its steps, a trinket
+--(see Core/Trinkets.lua) or any other spell (by name or id) a countdown and a reminder at its time. Nil when the name is
+--none of those
 function ns:GetEntrySteps(specKey, name)
     local ramp = ns:FindRamp(specKey, name)
     if ramp then
@@ -166,6 +167,15 @@ function ns:GetEntrySteps(specKey, name)
             })
         end
         return steps
+    end
+    local trinket = ns:FindTrinket(name)
+    if trinket then
+        local trinketName = trinket.name or name
+        local icon = trinket.icon or QUESTION_MARK_ICON
+        return {
+            { text = trinketName .. ' Soon', icon = icon, offset = ns.db.options.timerDuration, countdown = true },
+            { text = 'Use ' .. trinketName, icon = icon, offset = 0, tts = 'Use trinket' }
+        }
     end
     local info = C_Spell.GetSpellInfo(tonumber(name) or name)
     if info and info.iconID then

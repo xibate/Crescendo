@@ -80,7 +80,7 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
         end
     end
     if #unknown > 0 then
-        ns:WriteOutput("Skipping what isn't a ramp or a spell you know: " .. table.concat(unknown, ', '))
+        ns:WriteOutput("Skipping what isn't a ramp, a spell you know or an equipped trinket: " .. table.concat(unknown, ', '))
     end
 end
 

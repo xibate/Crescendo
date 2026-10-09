@@ -26,5 +26,5 @@ end
 
 --Prints a message in chat with the addon name in front
 function ns:WriteOutput(text)
-    print('|cffff680aZynx Ramp Helper:|r ' .. text)
+    print('|cff0cd29fCrescendo:|r ' .. text)
 end
