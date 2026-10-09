@@ -28,7 +28,8 @@ local defaults = {
         preReqsOnly = false,
         readFromNote = false,
         mrtPersonalNote = false,
-        timerDuration = 3
+        timerDuration = 3,
+        snapToGrid = true
     },
     plans = {},
     testPlans = {},

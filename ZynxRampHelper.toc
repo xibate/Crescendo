@@ -28,5 +28,6 @@ UI\Window.lua
 UI\Planner.lua
 UI\RampsPage.lua
 UI\DisplayPage.lua
+UI\Unlock.lua
 
 main.lua

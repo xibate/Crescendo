@@ -54,15 +54,18 @@ local function Build(frame)
     left:SetPoint("BOTTOMLEFT")
     left:SetWidth(COLUMN_W)
     ns:SectionLabel(left, "Reminder display"):SetPoint("TOPLEFT", 0, 0)
-    page.preview = ns:Button(left, "Show preview", 140, 26, function()
+    page.unlock = ns:Button(left, "Unlock", 100, 26, function()
+        ns:SetUnlocked(true)
+    end, true)
+    page.unlock:SetPoint("TOPLEFT", 0, -18)
+    ns:Tooltip(page.unlock, "Unlock", "Dims the screen under a grid and shows the reminders with a box to drag them where you want, " ..
+        "like EllesmereUI's unlock mode. Lock them with the toolbar, Escape or by entering combat. Also /zrh unlock.")
+    page.preview = ns:Button(left, "Show preview", 120, 26, function()
         ns:ToggleDisplay()
         page.Refresh()
     end, true)
-    page.preview:SetPoint("TOPLEFT", 0, -18)
+    page.preview:SetPoint("LEFT", page.unlock, "RIGHT", 6, 0)
     ns:Tooltip(page.preview, "Preview", "Shows three example reminders where they will show, so you can place and size them. The sliders move them while they show.")
-    local growLabel = ns:Text(left, 11, theme.dim, "RIGHT")
-    growLabel:SetPoint("RIGHT", left, "TOPRIGHT", -218, -31)
-    growLabel:SetText("Grow direction")
     page.grow = Add(ns:Segmented(left, {
         { text = "Up", value = 'top' },
         { text = "Down", value = 'bottom' },
@@ -70,6 +73,9 @@ local function Build(frame)
         { text = "Right", value = 'right' }
     }, 210, 26, (Option('growDirection')), select(2, Option('growDirection', true))))
     page.grow:SetPoint("TOPRIGHT", 0, -18)
+    local growLabel = ns:Text(left, 10, theme.dim, "LEFT")
+    growLabel:SetPoint("BOTTOMLEFT", page.grow, "TOPLEFT", 0, 4)
+    growLabel:SetText("Grow direction")
 
     local sliders = {
         { "Position X", -1000, 1000, 1, 'framePositionX' },

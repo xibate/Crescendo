@@ -216,8 +216,8 @@ function ZynxRampHelper_OnAddonCompartmentClick()
     ns:ToggleWindow()
 end
 
---/zrh opens the window, /zrh ramps or /zrh display a page, /zrh phase 2 starts stage 2 without a boss mod and /zrh stop
---stops a test
+--/zrh opens the window, /zrh ramps or /zrh display a page, /zrh unlock moves the reminders, /zrh phase 2 starts stage 2
+--without a boss mod and /zrh stop stops a test
 function ns:SetUpCommands()
     AddSettingsEntry()
     SLASH_ZYNXRAMPHELPER1 = "/zrh"
@@ -228,6 +228,8 @@ function ns:SetUpCommands()
             ns:StartPhaseManually(phase)
         elseif command == 'stop' then
             ns:StopTest()
+        elseif command == 'unlock' or command == 'lock' then
+            ns:SetUnlocked(command == 'unlock' and not ns:IsUnlocked())
         elseif PageInfo(command) then
             ns:ToggleWindow(command)
         elseif command == 'settings' or command == 'options' then
