@@ -127,15 +127,22 @@ local function Build(frame)
     local getCountdown, setCountdown = Option('timerDuration')
     page.countdown = Add(ns:Slider(right, "Spell countdown (seconds)", COLUMN_W, 2, 10, 1, getCountdown, setCountdown,
         "How many seconds before a spell in the plan its countdown starts. Ramps have their own steps."))
-    page.countdown:SetPoint("TOPLEFT", 0, -258)
+    page.countdown:SetPoint("TOPLEFT", 0, -282)
+    local getHide, setHide = Option('hideOnCooldown')
+    page.hideOnCooldown = Add(ns:Checkbox(right, "Hide reminders while the spell or trinket is on cooldown", getHide, setHide,
+        "Leaves out the reminders of a ramp, spell or trinket that won't be ready by the time it should land. A ramp goes by " ..
+        "the spell set for it on the Ramps page.\n\nDuring boss fights the game can hide cooldowns from addons. Then it goes " ..
+        "by when you last cast the spell, and when it can't tell, the reminder shows."))
+    page.hideOnCooldown:SetWidth(COLUMN_W)
+    page.hideOnCooldown:SetPoint("TOPLEFT", 0, -254)
 
-    ns:SectionLabel(right, "MRT notes"):SetPoint("TOPLEFT", 0, -318)
+    ns:SectionLabel(right, "MRT notes"):SetPoint("TOPLEFT", 0, -342)
     page.mainNote = Add(ns:Checkbox(right, "Take my times from the main MRT note", Option('readFromNote')))
-    page.mainNote:SetPoint("TOPLEFT", 0, -338)
+    page.mainNote:SetPoint("TOPLEFT", 0, -362)
     page.personalNote = Add(ns:Checkbox(right, "Take my times from my personal MRT note", Option('mrtPersonalNote')))
-    page.personalNote:SetPoint("TOPLEFT", 0, -362)
+    page.personalNote:SetPoint("TOPLEFT", 0, -386)
     local noteHelp = ns:Text(right, 10, theme.dim)
-    noteHelp:SetPoint("TOPLEFT", 0, -388)
+    noteHelp:SetPoint("TOPLEFT", 0, -412)
     noteHelp:SetPoint("RIGHT", right, "RIGHT", 0, 0)
     noteHelp:SetWordWrap(true)
     noteHelp:SetText("With one of these on, the times of your plans are replaced by your lines in the note during the " ..

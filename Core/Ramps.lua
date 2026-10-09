@@ -154,6 +154,7 @@ function ns:GetEntrySteps(specKey, name)
     if ramp then
         local gcd = ns:GetGcd()
         local rampIcon = SpellIcon(ramp.spellId) or SpellIcon(name)
+        local cooldown = ramp.spellId and { spellId = ramp.spellId }
         local steps = {}
         for _, step in ipairs(ns:ParseRampSteps(ramp.steps) or {}) do
             table.insert(steps, {
@@ -163,7 +164,8 @@ function ns:GetEntrySteps(specKey, name)
                 countdown = step.countdown,
                 chargesOf = step.chargesOf,
                 offset = step.seconds or (step.gcds and step.gcds * gcd) or 0,
-                icon = SpellIcon(step.iconSpell) or SpellIcon(step.text) or rampIcon or QUESTION_MARK_ICON
+                icon = SpellIcon(step.iconSpell) or SpellIcon(step.text) or rampIcon or QUESTION_MARK_ICON,
+                cooldown = cooldown
             })
         end
         return steps
@@ -172,17 +174,19 @@ function ns:GetEntrySteps(specKey, name)
     if trinket then
         local trinketName = trinket.name or name
         local icon = trinket.icon or QUESTION_MARK_ICON
+        local cooldown = { slot = trinket.slot, itemId = trinket.itemId, spellId = trinket.spellId }
         return {
-            { text = trinketName .. ' Soon', icon = icon, offset = ns.db.options.timerDuration, countdown = true },
-            { text = 'Use ' .. trinketName, icon = icon, offset = 0, tts = 'Use trinket' }
+            { text = trinketName .. ' Soon', icon = icon, offset = ns.db.options.timerDuration, countdown = true, cooldown = cooldown },
+            { text = 'Use ' .. trinketName, icon = icon, offset = 0, tts = 'Use trinket', cooldown = cooldown }
         }
     end
     local info = C_Spell.GetSpellInfo(tonumber(name) or name)
     if info and info.iconID then
         local spellName = info.name or name
+        local cooldown = info.spellID and { spellId = info.spellID }
         return {
-            { text = spellName .. ' Soon', icon = info.iconID, offset = ns.db.options.timerDuration, countdown = true },
-            { text = spellName, icon = info.iconID, offset = 0 }
+            { text = spellName .. ' Soon', icon = info.iconID, offset = ns.db.options.timerDuration, countdown = true, cooldown = cooldown },
+            { text = spellName, icon = info.iconID, offset = 0, cooldown = cooldown }
         }
     end
 end

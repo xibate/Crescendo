@@ -104,7 +104,7 @@ local function MatchingAnchors(name, spellId, count)
     local matches = {}
     for _, anchor in ipairs(ns.abilityAnchors) do
         local sameAbility = (spellId and anchor.spellIds[spellId]) or anchor.names[name:lower()]
-        if sameAbility and (not anchor.counts or (count and anchor.counts[count])) then
+        if sameAbility and ns:AnchorMatchesCast(anchor, count) then
             table.insert(matches, anchor)
         end
     end
@@ -206,9 +206,8 @@ function ns:ShowDueAbilityReminders(now)
     for _, timing in pairs(abilityTimings) do
         for _, reminder in ipairs(timing.reminders) do
             if not reminder.shown and ns:IsDue(reminder, reminder.at - now) then
-                reminder.shown = true
                 timing.shown[reminder.key] = true
-                ns:ShowReminder(reminder)
+                ns:Remind(reminder, reminder.at - now)
             end
         end
     end

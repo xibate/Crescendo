@@ -120,8 +120,9 @@ local function Build(frame)
 
     local spellLabel = ns:SectionLabel(right, "Spell id")
     spellLabel:SetPoint("TOPRIGHT", -150, -2)
-    ns:HelpIcon(right, "Spell id", "The spell MRT notes use for this ramp, and its icon. Notes name spells by id, so with " ..
-        "this set a note line for that spell becomes this ramp."):SetPoint("LEFT", spellLabel, "RIGHT", 4, 0)
+    ns:HelpIcon(right, "Spell id", "The ramp's main spell: its icon, the spell MRT notes use for the ramp, and the cooldown " ..
+        "that hides the ramp's reminders when that option is on. Notes name spells by id, so with this set a note line for " ..
+        "that spell becomes this ramp."):SetPoint("LEFT", spellLabel, "RIGHT", 4, 0)
     page.spellId = ns:EditBox(right, 150, 24, function(text)
         local _, ramp = SelectedRamp()
         if ramp then

@@ -222,7 +222,6 @@ function ns:SetUpCommands()
     AddSettingsEntry()
     SLASH_CRESCENDO1 = "/cres"
     SLASH_CRESCENDO2 = "/crescendo"
-    SLASH_CRESCENDO3 = "/zrh"
     SlashCmdList.CRESCENDO = function(message)
         local command = message:match("^%s*(%S*)"):lower()
         local phase = message:match("^%s*phase%s+(%d+%.?%d*)")

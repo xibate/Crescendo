@@ -4,6 +4,7 @@ local _, ns = ...
 --  01:25 - Evangelism                  1 minute 25 after the pull
 --  00:50 p2 - Ultimate Penitence       50 seconds after the boss mod shows stage 2, intermissions are stages like p1.5
 --  @Spectral Coils #2 -3 - Barrier     3 seconds before the 2nd Spectral Coils on the boss mod bar, see Core/BossMods.lua
+--  @Spectral Coils #every 2 - Barrier  every other cast (1st, 3rd, 5th...), '#every 3 from 2' is the 2nd, 5th, 8th...
 --  02:10 - Rewind, Time Dilation       several at the same time, a spell id works instead of a name
 --The dash can be left out after a time. Lines starting with -- are comments
 
@@ -22,13 +23,39 @@ local function SplitEntries(text)
     return entries
 end
 
---'Spectral Coils #2,4 -3' into the ability, the casts it applies to and the shift in seconds
+local EVERY_WORDS = { other = 2, second = 2, third = 3, fourth = 4, fifth = 5, sixth = 6 }
+
+--'2', 'other', '3rd' or '3 from 2' after 'every' into every how many casts and the first cast, nil when it can't be read
+function ns:ParseEvery(text)
+    text = text:lower():match('^%s*(.-)%s*$')
+    local word, from = text:match('^(%w+)%s+from%s+(%d+)$')
+    word = word or text:match('^(%w+)$')
+    if not word then
+        return nil
+    end
+    local every = tonumber(word) or tonumber(word:match('^(%d+)[snrt][tdh]$')) or EVERY_WORDS[word]
+    if not every or every < 1 then
+        return nil
+    end
+    return every, tonumber(from) or 1
+end
+
+--'Spectral Coils #2,4 -3' into the ability, the casts it applies to and the shift in seconds. Nil and what is wrong
+--when the casts can't be read
 local function ParseAbility(text)
     local anchor = { shift = 0 }
     local shift = text:match('%s([%+%-]%d+%.?%d*)$')
     if shift then
         anchor.shift = tonumber(shift)
         text = text:gsub('%s[%+%-]%d+%.?%d*$', '')
+    end
+    local everyText = text:match('#%s*[Ee][Vv][Ee][Rr][Yy]%s+(.-)$')
+    if everyText then
+        anchor.every, anchor.from = ns:ParseEvery(everyText)
+        if not anchor.every then
+            return nil, "'every " .. everyText .. "' isn't a number of casts, use every 2, every 3 or every 2 from 2"
+        end
+        text = text:gsub('%s*#%s*[Ee][Vv][Ee][Rr][Yy]%s+.-$', '')
     end
     local counts = text:match('#%s*([%d%s,]+)$')
     if counts then
@@ -55,7 +82,10 @@ local function ParseLine(line)
         if not trigger or Trim(trigger) == '' or Trim(entries) == '' then
             return nil, "'" .. line .. "' needs a dash before the ramp or spell, like @Spectral Coils #2 - Evangelism"
         end
-        local anchor = ParseAbility(Trim(trigger))
+        local anchor, problem = ParseAbility(Trim(trigger))
+        if not anchor then
+            return nil, problem
+        end
         anchor.entries = SplitEntries(entries)
         return 'ability', anchor
     end
@@ -82,7 +112,8 @@ local function ParseLine(line)
     return 'time', timing
 end
 
---Reads a plan into its timed entries { seconds, phase, entry } and ability lines { name, spellId, counts, shift, entry }
+--Reads a plan into its timed entries { seconds, phase, entry } and ability lines { name, spellId, counts, every, from,
+--shift, entry }
 function ns:ParsePlan(text)
     local plan = { times = {}, abilities = {} }
     for line in ns:Lines(text) do
@@ -93,7 +124,8 @@ function ns:ParsePlan(text)
             end
         elseif kind == 'ability' then
             for _, entry in ipairs(parsed.entries) do
-                table.insert(plan.abilities, { name = parsed.name, spellId = parsed.spellId, counts = parsed.counts, shift = parsed.shift, entry = entry })
+                table.insert(plan.abilities, { name = parsed.name, spellId = parsed.spellId, counts = parsed.counts, every = parsed.every,
+                    from = parsed.from, shift = parsed.shift, entry = entry })
             end
         end
     end
@@ -155,15 +187,28 @@ local function FormatSeconds(seconds)
     return string.format('%.1f', seconds)
 end
 
---The assignments to one boss ability in a plan, one per ramp or spell in plan order:
---{ casts = { 2, 4 } or nil for every cast, before = seconds before the ability the ramp lands, entry = ramp or spell }
+--True when an ability line applies to a cast with this number on the boss mod bar
+function ns:AnchorMatchesCast(anchor, count)
+    if anchor.counts then
+        return count ~= nil and anchor.counts[count] == true
+    end
+    if anchor.every then
+        return count ~= nil and count >= anchor.from and (count - anchor.from) % anchor.every == 0
+    end
+    return true
+end
+
+--The assignments to one boss ability in a plan, one per ramp or spell in plan order: { casts = { 2, 4 }, or every = 2
+--and from = 1 for every other cast, or neither for every cast, before = seconds before the ability the ramp lands,
+--entry = ramp or spell }
 function ns:GetAbilityAssignments(planText, ability)
     local assignments = {}
     for line in ns:Lines(planText) do
         local kind, parsed = ParseLine(line)
         if kind == 'ability' and LineMatchesAbility(parsed, ability) then
             for _, entry in ipairs(parsed.entries) do
-                table.insert(assignments, { casts = SortedCasts(parsed.counts), before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
+                table.insert(assignments, { casts = SortedCasts(parsed.counts), every = parsed.every, from = parsed.from,
+                    before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
             end
         end
     end
@@ -175,6 +220,8 @@ function ns:FormatAbilityLine(abilityText, assignment)
     local line = '@' .. abilityText
     if assignment.casts and #assignment.casts > 0 then
         line = line .. ' #' .. table.concat(assignment.casts, ',')
+    elseif assignment.every then
+        line = line .. ' #every ' .. assignment.every .. ((assignment.from or 1) > 1 and (' from ' .. assignment.from) or '')
     end
     local before = assignment.before or 0
     if before > 0 then

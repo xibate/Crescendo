@@ -65,8 +65,7 @@ end
 function ns:ShowDueReminders(reminders, elapsed)
     for _, reminder in ipairs(reminders or {}) do
         if not reminder.shown and ns:IsDue(reminder, reminder.at - elapsed) then
-            reminder.shown = true
-            ns:ShowReminder(reminder)
+            ns:Remind(reminder, reminder.at - elapsed)
         end
     end
 end

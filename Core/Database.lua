@@ -8,6 +8,7 @@ local DATABASE_VERSION = 3
 -- testPlans      testPlans[spec] = plan text of the old testing mode, no longer used
 -- ramps          ramps[spec][ramp name] = { spellId = spell MRT notes use, steps = steps text, see Core/Ramps.lua }
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
+-- cooldowns      cooldowns[spell id] = cooldown in seconds, seen when it could be read, see Core/Cooldowns.lua
 -- recordings     recordings[encounter id][difficulty slug] = the longest recorded pull, see Core/Test.lua
 -- ui             what is selected in the window
 local defaults = {
@@ -29,12 +30,14 @@ local defaults = {
         readFromNote = false,
         mrtPersonalNote = false,
         timerDuration = 3,
-        snapToGrid = true
+        snapToGrid = true,
+        hideOnCooldown = false
     },
     plans = {},
     testPlans = {},
     ramps = {},
     seenAbilities = {},
+    cooldowns = {},
     recordings = {},
     ui = {}
 }

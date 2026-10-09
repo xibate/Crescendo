@@ -145,8 +145,38 @@ local function Seconds(value)
     return string.format("%gs", math.floor(value * 10 + 0.5) / 10)
 end
 
-local function CastsText(casts)
-    return casts and ("cast " .. table.concat(casts, ', ')) or "every cast"
+local function Ordinal(number)
+    local last, lastTwo = number % 10, number % 100
+    if lastTwo >= 11 and lastTwo <= 13 then
+        return number .. "th"
+    end
+    return number .. (last == 1 and "st" or last == 2 and "nd" or last == 3 and "rd" or "th")
+end
+
+--Which casts an assignment is for, in words
+local function CastsText(assignment)
+    if assignment.casts then
+        return "cast " .. table.concat(assignment.casts, ', ')
+    end
+    if assignment.every and assignment.every > 1 then
+        local text = assignment.every == 2 and "every other cast" or ("every " .. Ordinal(assignment.every) .. " cast")
+        if (assignment.from or 1) > 1 then
+            text = text .. " from cast " .. assignment.from
+        end
+        return text
+    end
+    return "every cast"
+end
+
+--What the Which casts box shows for an assignment
+local function CastsBoxText(assignment)
+    if assignment.casts then
+        return table.concat(assignment.casts, ',')
+    end
+    if assignment.every then
+        return "every " .. assignment.every .. ((assignment.from or 1) > 1 and (" from " .. assignment.from) or "")
+    end
+    return ""
 end
 
 local function TimingText(before)
@@ -185,7 +215,7 @@ local function DescribeAssignment(assignment)
         return "Not a ramp, a spell you know or an equipped trinket", true
     end
     local before = assignment.before or 0
-    local text = "Lands " .. TimingText(before) .. " " .. CastsText(assignment.casts)
+    local text = "Lands " .. TimingText(before) .. " " .. CastsText(assignment)
     local first = schedule[1]
     if first and first.before > before then
         text = text .. "  ·  first message " .. TimingText(first.before) .. " it"
@@ -342,7 +372,7 @@ local function AbilityTooltip(tooltip, row)
         tooltip:AddLine(" ")
         tooltip:AddLine("Assigned", Accent())
         for _, assignment in ipairs(assignments) do
-            tooltip:AddDoubleLine(assignment.entry, TimingText(assignment.before) .. " " .. CastsText(assignment.casts), 1, 1, 1, 0.7, 0.7, 0.7)
+            tooltip:AddDoubleLine(assignment.entry, TimingText(assignment.before) .. " " .. CastsText(assignment), 1, 1, 1, 0.7, 0.7, 0.7)
         end
     else
         tooltip:AddLine("Click to assign a ramp or cooldown to it", 0.7, 0.7, 0.7)
@@ -442,22 +472,39 @@ end
 -- Right: assignments of the selected ability
 ------------------------------------------------------------------------------------------------------------------------
 
-local COLUMNS = { casts = 0, entry = 78, menu = 282, before = 316, delete = 384 }
+local COLUMNS = { casts = 0, entry = 106, menu = 282, before = 316, delete = 384 }
 
 local CASTS_HELP = "BigWigs and DBM number each cast of an ability in a fight: the bar shows 'Spectral Coils (2)' before " ..
-    "the second one. Leave this empty to have the assignment on every cast, or list the casts it is for, like 2,4 for the " ..
-    "second and fourth.\n\nThe count can start over in a new stage, the same way the boss mod's does."
+    "the second one. Leave this empty to have the assignment on every cast, or say which casts it is for:\n\n" ..
+    "|cffffd1002,4|r  the second and fourth cast\n" ..
+    "|cffffd100every 2|r  every other cast: 1st, 3rd, 5th...\n" ..
+    "|cffffd100every 3|r  every third cast: 1st, 4th, 7th...\n" ..
+    "|cffffd100every 2 from 2|r  every other cast starting at the 2nd: 2nd, 4th, 6th...\n\n" ..
+    "'every other' and 'every third' work too. The count can start over in a new stage, the same way the boss mod's does."
 local BEFORE_HELP = "How many seconds before the ability goes off your ramp or spell should land: the last step of a ramp, " ..
     "or the cast of a spell. The earlier steps of the ramp show before that, as far ahead as the ramp says, so the first " ..
     "message comes in time to start it.\n\nUse a negative number to land after the ability."
 
-local function ParseCasts(text)
+--Sets which casts an assignment is for from the Which casts box: '2,4', 'every 2', 'every 3 from 2' or empty for all.
+--Returns false when the text can't be read
+local function SetCasts(assignment, text)
+    text = (text or ''):lower()
+    local everyText = text:match('^%s*every%s+(.-)%s*$')
+    if everyText then
+        local every, from = ns:ParseEvery(everyText)
+        if not every then
+            return false
+        end
+        assignment.casts, assignment.every, assignment.from = nil, every > 1 and every or nil, every > 1 and from or nil
+        return true
+    end
     local casts = {}
-    for number in (text or ''):gmatch('%d+') do
+    for number in text:gmatch('%d+') do
         table.insert(casts, tonumber(number))
     end
     table.sort(casts)
-    return #casts > 0 and casts or nil
+    assignment.casts, assignment.every, assignment.from = #casts > 0 and casts or nil, nil, nil
+    return true
 end
 
 local function SaveAssignments()
@@ -505,8 +552,9 @@ local function AssignmentRow(index)
     row = CreateFrame("Frame", nil, planner.assignmentList.content)
     row:SetHeight(46)
     row.casts = ns:EditBox(row, COLUMNS.entry - 8, 26, function(text)
-        row.assignment.casts = ParseCasts(text)
-        SaveAssignments()
+        if SetCasts(row.assignment, text) then
+            SaveAssignments()
+        end
         Refresh(true)
     end)
     row.casts:SetPoint("TOPLEFT", COLUMNS.casts, 0)
@@ -761,7 +809,7 @@ local function RefreshAssignments(ability, keepRows)
         planner.assignments = ability and ns:GetAbilityAssignments(GetPlanText(), ability) or {}
         if not sameAbility then
             local first = planner.assignments[1]
-            planner.testCount:SetValue(tostring(first and first.casts and first.casts[1] or 1))
+            planner.testCount:SetValue(tostring(first and (first.casts and first.casts[1] or first.from) or 1))
             planner.testSeconds:SetValue(tostring(UI().testSeconds or 15))
         end
     end
@@ -795,7 +843,7 @@ local function RefreshAssignments(ability, keepRows)
         local row = AssignmentRow(index)
         row.index = index
         row.assignment = assignment
-        row.casts:SetValue(assignment.casts and table.concat(assignment.casts, ',') or '')
+        row.casts:SetValue(CastsBoxText(assignment))
         row.entry:SetValue(assignment.entry or '')
         row.before:SetValue(tostring(assignment.before or 0))
         local text, isError = DescribeAssignment(assignment)

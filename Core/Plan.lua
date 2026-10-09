@@ -19,6 +19,8 @@ function ns:CreateReminder(step, at)
         tts = step.tts,
         countdown = step.countdown,
         chargesOf = step.chargesOf,
+        cooldown = step.cooldown,
+        offset = step.offset,
         shown = false
     }
 end
