@@ -15,15 +15,18 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
 ### Plans
 
 1. On the left, pick your spec, the difficulty and the boss.
-2. In the middle, pick one of the boss's abilities. Hover one for its spell tooltip, its stage and what is assigned to it. The number next to an ability is how many ramps or spells are assigned to it. Abilities your boss mod showed bars for, and ones named only in the plan, are listed below the boss's own.
-3. On the right, add an assignment:
-   - **Which casts**: empty for every cast, the casts it is for like `2,4`, or a pattern: `every 2` (every other cast: 1st, 3rd, 5th...), `every 3` (1st, 4th, 7th...) or `every 2 from 2` (2nd, 4th, 6th...). `every other` and `every third` work too. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
-   - **Ramp, spell or trinket**: type it, or pick it from the menu of your ramps, cooldowns and equipped on-use trinkets.
-   - **Sec before**: how many seconds before the ability the ramp lands (its last step) or the spell is cast.
+2. In the middle, pick one of the boss's abilities. For bosses with stages, choose how they are listed:
+   - **By stage**: each stage with the abilities that happen in it. An ability that comes back in a later stage, like Spectral Coils in Ula'tek's intermission, is listed under every stage it happens in. What you assign there only triggers in that stage.
+   - **All stages**: every ability once. What you assign there triggers in every stage.
+
+   Hover an ability for its spell tooltip, the stages it happens in and what is assigned to it. The number next to it is how many assignments trigger there. Abilities without a stage, and ones your boss mod showed bars for or only named in the plan, are listed under Any stage.
+3. On the right, click **+ Add assignment** and pick what to cast: one of your ramps, cooldowns or equipped on-use trinkets, or type any spell or item. Each assignment reads like a sentence: *what* lands *3* sec before *every cast*.
+   - Use **-** and **+** (or type a number) for how many seconds before the ability the ramp lands (its last step) or the spell is cast.
+   - Pick which casts: every cast, every other cast, every other from the 2nd, every 3rd, or **Only some casts...** to list casts like `2,4` or write a pattern like `every 3 from 2`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
 
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
 
-Assignments are saved as ability lines in the boss's plan (`@Spectral Coils #2,4 -3 - Power Word: Barrier`). The Plan text tab shows and edits the whole plan, including times after the pull and stages, and the MRT note tab takes times from a note or copies the plan out as one.
+Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage). The Plan text tab shows and edits the whole plan, including times after the pull and stages, and the MRT note tab takes times from a note or copies the plan out as one.
 
 ### Testing
 
@@ -54,6 +57,7 @@ Each spec, difficulty and boss has a plan, which the Plan text tab edits. One li
 | `@Spectral Coils` | at every cast of a boss ability |
 | `@Spectral Coils #2,4` | only the 2nd and 4th cast, the number in brackets on the boss mod bar |
 | `@Spectral Coils #every 2` | every other cast, `#every 3 from 2` is the 2nd, 5th, 8th... |
+| `@Spectral Coils p2.5` | only casts in stage 2.5 (the intermission), `p1,3` is stages 1 and 3 |
 | `@Spectral Coils #2 -3` | 3 seconds before the ability, `+3` is after |
 | `@1299010 #2` | a spell id instead of the ability name |
 
@@ -96,7 +100,7 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 
 | Folder | Contents |
 | --- | --- |
-| [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities, from BigWigs |
+| [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities and stages, from BigWigs |
 | [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `Cooldowns.lua` whether a spell or trinket is ready, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
 | [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/cres`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages, `Unlock.lua` moving the reminders |
 | `main.lua` | Starts and stops the fight on encounter events |

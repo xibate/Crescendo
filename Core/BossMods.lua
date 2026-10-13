@@ -104,7 +104,7 @@ local function MatchingAnchors(name, spellId, count)
     local matches = {}
     for _, anchor in ipairs(ns.abilityAnchors) do
         local sameAbility = (spellId and anchor.spellIds[spellId]) or anchor.names[name:lower()]
-        if sameAbility and ns:AnchorMatchesCast(anchor, count) then
+        if sameAbility and ns:AnchorMatchesCast(anchor, count) and ns:AnchorMatchesPhase(anchor, ns.fight.phase or '1') then
             table.insert(matches, anchor)
         end
     end

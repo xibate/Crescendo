@@ -74,7 +74,8 @@ local function After(seconds, callback)
 end
 
 --Starts a test of a boss plan. Without 'cast' it replays the recorded pull, with the plan's times and ability lines.
---With cast = { ability, count, seconds } only the ability lines of that ability run, for one cast in that many seconds
+--With cast = { ability, count, seconds, phase } only the ability lines of that ability run, for one cast in that many
+--seconds, in that stage when one is given
 function ns:StartTest(specKey, diffSlug, encounterId, cast)
     if ns.fight.running and not ns.fight.test then
         ns:WriteOutput("Tests can't run during a boss fight")
@@ -91,6 +92,9 @@ function ns:StartTest(specKey, diffSlug, encounterId, cast)
     local duration
     if cast then
         ns.plan = {}
+        if cast.phase then
+            ns:StartPhase(cast.phase)
+        end
         local ability = cast.ability
         local name = ability.name or (C_Spell.GetSpellInfo(ability.spellId) or {}).name or tostring(ability.spellId)
         ns:OnBossModBar('test', 'test', name .. ' (' .. cast.count .. ')', cast.seconds, ability.spellId, cast.count)

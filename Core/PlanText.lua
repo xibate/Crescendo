@@ -5,6 +5,7 @@ local _, ns = ...
 --  00:50 p2 - Ultimate Penitence       50 seconds after the boss mod shows stage 2, intermissions are stages like p1.5
 --  @Spectral Coils #2 -3 - Barrier     3 seconds before the 2nd Spectral Coils on the boss mod bar, see Core/BossMods.lua
 --  @Spectral Coils #every 2 - Barrier  every other cast (1st, 3rd, 5th...), '#every 3 from 2' is the 2nd, 5th, 8th...
+--  @Spectral Coils p2.5 - Barrier      only casts in stage 2.5, 'p1,3' is stages 1 and 3. Without it, every stage
 --  02:10 - Rewind, Time Dilation       several at the same time, a spell id works instead of a name
 --The dash can be left out after a time. Lines starting with -- are comments
 
@@ -65,6 +66,21 @@ local function ParseAbility(text)
         end
         text = text:gsub('%s*#%s*[%d%s,]+$', '')
     end
+    local phases = text:match('%s[pP]([%d%.]+[%d%.,]*)$')
+    if phases then
+        anchor.phases, anchor.phaseList = {}, {}
+        for phase in phases:gmatch('[%d%.]+') do
+            if tonumber(phase) then
+                local key = ns:PhaseKey(phase)
+                if not anchor.phases[key] then
+                    anchor.phases[key] = true
+                    table.insert(anchor.phaseList, key)
+                end
+            end
+        end
+        table.sort(anchor.phaseList, function(a, b) return tonumber(a) < tonumber(b) end)
+        text = text:gsub('%s[pP][%d%.]+[%d%.,]*$', '')
+    end
     text = Trim(text)
     anchor.spellId = tonumber(text)
     anchor.name = text:lower()
@@ -113,7 +129,7 @@ local function ParseLine(line)
 end
 
 --Reads a plan into its timed entries { seconds, phase, entry } and ability lines { name, spellId, counts, every, from,
---shift, entry }
+--phases, shift, entry }
 function ns:ParsePlan(text)
     local plan = { times = {}, abilities = {} }
     for line in ns:Lines(text) do
@@ -125,7 +141,7 @@ function ns:ParsePlan(text)
         elseif kind == 'ability' then
             for _, entry in ipairs(parsed.entries) do
                 table.insert(plan.abilities, { name = parsed.name, spellId = parsed.spellId, counts = parsed.counts, every = parsed.every,
-                    from = parsed.from, shift = parsed.shift, entry = entry })
+                    from = parsed.from, phases = parsed.phases, shift = parsed.shift, entry = entry })
             end
         end
     end
@@ -161,11 +177,22 @@ function ns:AbilityLineText(encounterId, ability)
     return ability.name
 end
 
-local function LineMatchesAbility(anchor, ability)
+--Whether an ability line is for an ability, and in a scope: nil for any line, 'all' for lines without stages, or a stage
+--key for lines of only that stage
+local function LineMatchesAbility(anchor, ability, scope)
+    local sameAbility
     if anchor.spellId then
-        return anchor.spellId == ability.spellId
+        sameAbility = anchor.spellId == ability.spellId
+    else
+        sameAbility = ability.name ~= nil and anchor.name == ability.name:lower()
     end
-    return ability.name ~= nil and anchor.name == ability.name:lower()
+    if not sameAbility or scope == nil then
+        return sameAbility
+    end
+    if scope == 'all' then
+        return anchor.phases == nil
+    end
+    return anchor.phaseList ~= nil and #anchor.phaseList == 1 and anchor.phaseList[1] == scope
 end
 
 local function SortedCasts(counts)
@@ -198,17 +225,23 @@ function ns:AnchorMatchesCast(anchor, count)
     return true
 end
 
+--True when an ability line applies in a stage, by its stage key
+function ns:AnchorMatchesPhase(anchor, phase)
+    return anchor.phases == nil or anchor.phases[phase] == true
+end
+
 --The assignments to one boss ability in a plan, one per ramp or spell in plan order: { casts = { 2, 4 }, or every = 2
---and from = 1 for every other cast, or neither for every cast, before = seconds before the ability the ramp lands,
---entry = ramp or spell }
-function ns:GetAbilityAssignments(planText, ability)
+--and from = 1 for every other cast, or neither for every cast, phases = { '2.5' } or nil for every stage, before =
+--seconds before the ability the ramp lands, entry = ramp or spell }. scope is nil for all of them, 'all' for the ones
+--for every stage, or a stage key for the ones for only that stage
+function ns:GetAbilityAssignments(planText, ability, scope)
     local assignments = {}
     for line in ns:Lines(planText) do
         local kind, parsed = ParseLine(line)
-        if kind == 'ability' and LineMatchesAbility(parsed, ability) then
+        if kind == 'ability' and LineMatchesAbility(parsed, ability, scope) then
             for _, entry in ipairs(parsed.entries) do
                 table.insert(assignments, { casts = SortedCasts(parsed.counts), every = parsed.every, from = parsed.from,
-                    before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
+                    phases = parsed.phaseList, before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
             end
         end
     end
@@ -218,6 +251,9 @@ end
 --An assignment as an ability line, like '@Spectral Coils #2,4 -3 - Evangelism'
 function ns:FormatAbilityLine(abilityText, assignment)
     local line = '@' .. abilityText
+    if assignment.phases and #assignment.phases > 0 then
+        line = line .. ' p' .. table.concat(assignment.phases, ',')
+    end
     if assignment.casts and #assignment.casts > 0 then
         line = line .. ' #' .. table.concat(assignment.casts, ',')
     elseif assignment.every then
@@ -232,13 +268,15 @@ function ns:FormatAbilityLine(abilityText, assignment)
     return line .. ' - ' .. Trim(assignment.entry)
 end
 
---Replaces the assignments to one boss ability in a plan. Every other line stays where it is, the new ability lines go
---where the first old one was, or at the end. Assignments without a ramp or spell are left out
-function ns:SetAbilityAssignments(planText, encounterId, ability, assignments)
+--Replaces the assignments to one boss ability in a scope ('all' or a stage key, see ns:GetAbilityAssignments) in a plan.
+--Every other line stays where it is, the new ability lines go where the first old one was, or at the end. Assignments
+--without a ramp or spell are left out, and assignments for a stage get that stage
+function ns:SetAbilityAssignments(planText, encounterId, ability, assignments, scope)
+    scope = scope or 'all'
     local lines, insertAt = {}, nil
     for line in ((planText or '') .. '\n'):gmatch('(.-)\r?\n') do
         local kind, parsed = ParseLine(line)
-        if kind == 'ability' and LineMatchesAbility(parsed, ability) then
+        if kind == 'ability' and LineMatchesAbility(parsed, ability, scope) then
             insertAt = insertAt or #lines + 1
         else
             table.insert(lines, line)
@@ -251,6 +289,7 @@ function ns:SetAbilityAssignments(planText, encounterId, ability, assignments)
     local abilityText = ns:AbilityLineText(encounterId, ability)
     for _, assignment in ipairs(assignments) do
         if assignment.entry and assignment.entry:find('%S') then
+            assignment.phases = scope ~= 'all' and { scope } or nil
             table.insert(lines, insertAt, ns:FormatAbilityLine(abilityText, assignment))
             insertAt = insertAt + 1
         end
