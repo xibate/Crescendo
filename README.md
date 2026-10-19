@@ -24,10 +24,12 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
    - Use **-** and **+** (or type a number) for how many seconds before the ability the ramp lands (its last step) or the spell is cast.
    - Pick which casts, shown by their numbers: all casts, odd casts (1, 3, 5...), even casts (2, 4, 6...), every 3rd from the 1st, 2nd or 3rd, only the 1st, or **Pick casts...** to list casts like `2,4` or write a pattern like `every 4 from 2`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
 
+   - **Audio** picks how this assignment is heard: **Default** follows the General page, **Speak** says its messages, **Countdown** counts down to its press instead of saying Soon, **Silent** only shows it.
+
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
 4. On the right, the selected ability's first assignment shows in each reminder style (icon, bar and text, with the one in use named), Next up shows the first presses of the recorded pull (or of the plan's times), and the ready check line shows what Crescendo would say about this boss's plan.
 
-Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage). **Plan text**, under the assignments, shows and edits the whole plan, including times after the pull and stages. Its **Copy to...** copies the plan to the other difficulty of the boss or to another boss of the raid; a plan that was there is replaced, and **Undo** brings it back. **History** keeps the last ten versions of each plan, saved before an import, a copy over it, taking times from a note, saving the plan text and editing assignments (one every ten minutes); pick one to put it back.
+Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage; `!speak`, `!countdown` or `!silent` at the end is how it is heard, on timed lines too). **Plan text**, under the assignments, shows and edits the whole plan, including times after the pull and stages. Its **Copy to...** copies the plan to the other difficulty of the boss or to another boss of the raid; a plan that was there is replaced, and **Undo** brings it back. **History** keeps the last ten versions of each plan, saved before an import, a copy over it, taking times from a note, saving the plan text and editing assignments (one every ten minutes); pick one to put it back.
 
 ### Sharing
 

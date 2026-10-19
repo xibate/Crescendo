@@ -13,15 +13,27 @@ local function Trim(text)
     return (text:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
+--How an entry is heard, after its name: !speak says its messages, !countdown counts down to its press instead of saying
+--Soon, !silent only shows it. Without one, the General page decides
+local AUDIO = { speak = true, countdown = true, silent = true }
+
+--The entries of a line, with how each is heard (audio[index], nil for the General page's choice)
 local function SplitEntries(text)
-    local entries = {}
+    local entries, audio = {}, {}
     for entry in text:gmatch('[^,]+') do
         entry = Trim(entry)
+        local name, mode = entry:match('^(.-)%s*!(%a+)$')
+        if name and AUDIO[mode:lower()] then
+            entry, mode = Trim(name), mode:lower()
+        else
+            mode = nil
+        end
         if entry ~= '' then
             table.insert(entries, entry)
+            audio[#entries] = mode
         end
     end
-    return entries
+    return entries, audio
 end
 
 local EVERY_WORDS = { other = 2, second = 2, third = 3, fourth = 4, fifth = 5, sixth = 6 }
@@ -102,7 +114,7 @@ local function ParseLine(line)
         if not anchor then
             return nil, problem
         end
-        anchor.entries = SplitEntries(entries)
+        anchor.entries, anchor.audio = SplitEntries(entries)
         return 'ability', anchor
     end
     local minutes, seconds, rest = line:match('^%s*(%d+):(%d+%.?%d*)(.*)$')
@@ -121,27 +133,28 @@ local function ParseLine(line)
         timing.phase = ns:PhaseKey(phase)
         rest = afterPhase
     end
-    timing.entries = SplitEntries(rest:match('^%s*%-?%s*(.-)%s*$'))
+    timing.entries, timing.audio = SplitEntries(rest:match('^%s*%-?%s*(.-)%s*$'))
     if #timing.entries == 0 then
         return nil, "'" .. line .. "' doesn't say which ramp or spell, like 01:25 - Evangelism"
     end
     return 'time', timing
 end
 
---Reads a plan into its timed entries { seconds, phase, entry } and ability lines { name, spellId, counts, every, from,
---phases, shift, entry }
+--Reads a plan into its timed entries { seconds, phase, entry, audio } and ability lines { name, spellId, counts, every,
+--from, phases, shift, entry, audio }
 function ns:ParsePlan(text)
     local plan = { times = {}, abilities = {} }
     for line in ns:Lines(text) do
         local kind, parsed = ParseLine(line)
         if kind == 'time' then
-            for _, entry in ipairs(parsed.entries) do
-                table.insert(plan.times, { seconds = parsed.seconds, phase = parsed.phase, entry = entry })
+            for index, entry in ipairs(parsed.entries) do
+                table.insert(plan.times, { seconds = parsed.seconds, phase = parsed.phase, entry = entry, audio = parsed.audio[index] })
             end
         elseif kind == 'ability' then
-            for _, entry in ipairs(parsed.entries) do
+            for index, entry in ipairs(parsed.entries) do
                 table.insert(plan.abilities, { name = parsed.name, spellId = parsed.spellId, counts = parsed.counts, every = parsed.every,
-                    from = parsed.from, phases = parsed.phases, phaseList = parsed.phaseList, shift = parsed.shift, entry = entry })
+                    from = parsed.from, phases = parsed.phases, phaseList = parsed.phaseList, shift = parsed.shift, entry = entry,
+                    audio = parsed.audio[index] })
             end
         end
     end
@@ -239,9 +252,10 @@ function ns:GetAbilityAssignments(planText, ability, scope)
     for line in ns:Lines(planText) do
         local kind, parsed = ParseLine(line)
         if kind == 'ability' and LineMatchesAbility(parsed, ability, scope) then
-            for _, entry in ipairs(parsed.entries) do
+            for index, entry in ipairs(parsed.entries) do
                 table.insert(assignments, { casts = SortedCasts(parsed.counts), every = parsed.every, from = parsed.from,
-                    phases = parsed.phaseList, before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry })
+                    phases = parsed.phaseList, before = parsed.shift == 0 and 0 or -parsed.shift, entry = entry,
+                    audio = parsed.audio[index] })
             end
         end
     end
@@ -265,7 +279,7 @@ function ns:FormatAbilityLine(abilityText, assignment)
     elseif before < 0 then
         line = line .. ' +' .. FormatSeconds(-before)
     end
-    return line .. ' - ' .. Trim(assignment.entry)
+    return line .. ' - ' .. Trim(assignment.entry) .. (assignment.audio and (' !' .. assignment.audio) or '')
 end
 
 --Replaces the assignments to one boss ability in a scope ('all' or a stage key, see ns:GetAbilityAssignments) in a plan.

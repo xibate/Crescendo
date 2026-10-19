@@ -768,6 +768,14 @@ local function Capitalized(text)
     return (text:gsub('^%l', string.upper))
 end
 
+local AUDIO_CHOICES = {
+    { text = "Default: as the General page says", value = 'default' },
+    { text = "Speak its messages", value = 'speak' },
+    { text = "Count down to the press", value = 'countdown' },
+    { text = "Silent: only show it", value = 'silent' },
+}
+local AUDIO_LABELS = { speak = "Speak", countdown = "Countdown", silent = "Silent" }
+
 local function AssignmentCard(list, index)
     local card = list.cards[index]
     if card then
@@ -799,11 +807,28 @@ local function AssignmentCard(list, index)
     end)
     card.delete:SetPoint("TOPRIGHT", -8, -10)
     ns:Tooltip(card.delete, "Remove this assignment")
+    --How it is heard: what the General page says, its messages spoken, a countdown, or silent
+    card.audio = ns:Dropdown(card, 118, 28, function()
+        local audio = card.assignment and card.assignment.audio
+        return audio and AUDIO_LABELS[audio] or "Audio: default"
+    end, function()
+        local items = { { text = "How it is heard", header = true } }
+        for _, choice in ipairs(AUDIO_CHOICES) do
+            table.insert(items, { text = choice.text, value = choice.value })
+        end
+        return items
+    end, function(value)
+        card.assignment.audio = value ~= 'default' and value or nil
+        Save()
+    end)
+    card.audio:SetPoint("RIGHT", card.delete, "LEFT", -8, 0)
+    ns:Tooltip(card.audio, "Audio", "How this assignment is heard. Default follows Before a press, say on the General page. " ..
+        "Speak says its messages, Countdown counts down to the press instead of saying Soon, Silent only shows it.")
     card.pick = ns:Dropdown(card, 300, 28, function() return card.assignment and card.assignment.entry or '' end,
         function() return {} end, function() end)
     card.pick:SetScript("OnClick", function() OpenEntryMenu(card) end)
     card.pick:SetPoint("LEFT", card.icon, "RIGHT", 8, 0)
-    card.pick:SetPoint("RIGHT", card.delete, "LEFT", -8, 0)
+    card.pick:SetPoint("RIGHT", card.audio, "LEFT", -8, 0)
     card.pick.placeholder = ns:Text(card.pick, 12, theme.section)
     card.pick.placeholder:SetPoint("LEFT", 10, 0)
     card.pick.placeholder:SetText("Choose what to cast...")
@@ -814,7 +839,7 @@ local function AssignmentCard(list, index)
         Save()
     end)
     card.entryBox:SetPoint("LEFT", card.icon, "RIGHT", 8, 0)
-    card.entryBox:SetPoint("RIGHT", card.delete, "LEFT", -8, 0)
+    card.entryBox:SetPoint("RIGHT", card.audio, "LEFT", -8, 0)
     card.entryBox:SetPlaceholder("spell name, item name or item:id")
     card.entryBox:HookScript("OnEditFocusLost", function()
         if card.typing then
@@ -924,6 +949,7 @@ local function FillCards(list, items, y)
         card.group, card.assignment = item.group, assignment
         local hasEntry = assignment.entry and assignment.entry:find('%S')
         card.pick:Refresh()
+        card.audio:Refresh()
         card.pick.placeholder:SetShown(not hasEntry)
         card.pick:SetShown(not card.typing)
         card.entryBox:SetShown(card.typing == true)
@@ -1204,7 +1230,8 @@ local function BuildPlanTextTab(panel)
     help:SetWordWrap(true)
     help:SetJustifyV("BOTTOM")
     help:SetText("One line per timing: 01:25 - Evangelism after the pull, 00:50 p2 - Rewind after stage 2 starts, " ..
-        "@Spectral Coils p2 #2 -3 - Power Word: Barrier for boss abilities (p2 only in stage 2). Lines starting with -- are notes.")
+        "@Spectral Coils p2 #2 -3 - Power Word: Barrier for boss abilities (p2 only in stage 2). End with !speak, !countdown or !silent " ..
+        "for how it is heard. Lines starting with -- are notes.")
 end
 
 --The plans a Crescendo string exports: the selected plan, or every boss of its raid on both difficulties

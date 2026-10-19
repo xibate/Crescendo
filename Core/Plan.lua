@@ -12,9 +12,11 @@ function ns:ShouldUseStep(step)
 end
 
 --A reminder of a step: entry is the ramp or spell it is for, press is true for the step at the ramp's or spell's time,
---and countNumbers are the numbers a spoken countdown to the press says (see ns:CountdownNumbers)
-function ns:CreateReminder(step, at, entry, countNumbers)
+--countNumbers are the numbers a spoken countdown to the press says (see ns:CountdownNumbers) and audio how it is heard
+--(see ns:ReminderAudio)
+function ns:CreateReminder(step, at, entry, countNumbers, audio)
     return {
+        audio = audio,
         at = at,
         entry = entry,
         press = (step.offset or 0) == 0 and not step.chargesOf,
@@ -82,7 +84,7 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
             local at = math.floor(timing.seconds - step.offset + 0.5)
             if at >= 0 and ns:ShouldUseStep(step) then
                 ns.plan[timing.phase] = ns.plan[timing.phase] or {}
-                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at, timing.entry, CountNumbers(timing.entry)))
+                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at, timing.entry, CountNumbers(timing.entry), timing.audio))
             end
         end
     end

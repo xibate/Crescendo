@@ -98,6 +98,12 @@ function ns:CountdownNumbers(steps)
     return numbers
 end
 
+--How a reminder is heard: 'speak' says its messages, 'countdown' counts down to its press and doesn't say Soon,
+--'silent' only shows it. Its own choice from the plan, otherwise the General page's
+function ns:ReminderAudio(reminder)
+    return reminder.audio or (ns.db.options.spokenCountdown and 'countdown' or 'speak')
+end
+
 --With the spoken countdown on, says the last seconds before a press, once it is close enough. Returns true when it was
 --started
 function ns:CountDown(reminder, timeLeft)
@@ -106,7 +112,7 @@ function ns:CountDown(reminder, timeLeft)
     local lead = options.countdownLead or 0.5
     local numbers = reminder.countNumbers or {}
     local first = numbers[1]
-    if not options.spokenCountdown or not reminder.press or reminder.counted or not first or timeLeft > first + 0.6 + lead then
+    if ns:ReminderAudio(reminder) ~= 'countdown' or not reminder.press or reminder.counted or not first or timeLeft > first + 0.6 + lead then
         return false
     end
     reminder.counted = true

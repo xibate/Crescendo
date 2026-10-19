@@ -136,7 +136,7 @@ local function ScheduleAbilityTiming(barId, anchors, landsAt)
         local countNumbers = ns:CountdownNumbers(steps)
         for stepIndex, step in ipairs(steps) do
             if ns:ShouldUseStep(step) then
-                local reminder = ns:CreateReminder(step, landsAt + anchor.shift - step.offset, anchor.entry, countNumbers)
+                local reminder = ns:CreateReminder(step, landsAt + anchor.shift - step.offset, anchor.entry, countNumbers, anchor.audio)
                 reminder.key = anchorIndex .. '-' .. stepIndex
                 reminder.shown = timing.shown[reminder.key] or false
                 reminder.counted = timing.counted[reminder.key]

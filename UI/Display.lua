@@ -206,8 +206,12 @@ function ns:ShowReminder(reminder)
     C_Timer.NewTimer(SHOW_SECONDS, function()
         ClearFrame(frame)
     end)
-    --With the spoken countdown chosen, a Soon message shows without being spoken: the countdown takes its place
-    if not (reminder.countdown and ns.db.options.spokenCountdown) then
+    --With the countdown, a Soon message shows without being spoken: the countdown takes its place. Silent only shows
+    local audio = ns:ReminderAudio(reminder)
+    if audio == 'silent' then
+        return
+    end
+    if not (reminder.countdown and audio == 'countdown') then
         ns:SendTts(reminder.tts or reminder.text)
     end
     ns:PlayReminderSound(reminder)
