@@ -78,9 +78,6 @@ function ns:ShowDueReminders(reminders, elapsed)
     end
 end
 
---Speech comes a moment after it is asked for, so the countdown's numbers are said this much early
-local SPEECH_LEAD = 0.25
-
 --The numbers a spoken countdown to the press of a ramp or spell says: from the start set on the General page down to 1.
 --A number is left out when another step of it is spoken then, from just before that step until its words are said.
 --A step with a countdown on its icon, like a spell's 'Soon', isn't spoken with the countdown on, so it doesn't count
@@ -105,9 +102,11 @@ end
 --started
 function ns:CountDown(reminder, timeLeft)
     local options = ns.db.options
+    --Speech comes a moment after it is asked for, so the numbers are said a little early (a General page setting)
+    local lead = options.countdownLead or 0.5
     local numbers = reminder.countNumbers or {}
     local first = numbers[1]
-    if not options.spokenCountdown or not reminder.press or reminder.counted or not first or timeLeft > first + 0.6 + SPEECH_LEAD then
+    if not options.spokenCountdown or not reminder.press or reminder.counted or not first or timeLeft > first + 0.6 + lead then
         return false
     end
     reminder.counted = true
@@ -115,11 +114,11 @@ function ns:CountDown(reminder, timeLeft)
         return true
     end
     for _, number in ipairs(numbers) do
-        local delay = timeLeft - number - SPEECH_LEAD
+        local delay = timeLeft - number - lead
         if delay > -0.3 then
             C_Timer.NewTimer(math.max(0, delay), function()
                 if ns.fight.running then
-                    ns:SendTts(tostring(number))
+                    ns:SendTts(tostring(number), true)
                 end
             end)
         end

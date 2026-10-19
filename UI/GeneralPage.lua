@@ -88,6 +88,10 @@ local function Build(frame)
     page.countdownFrom = Add(ns:Slider(left, "Count down from", COLUMN_W - 24, 3, 10, 1, getFrom, setFrom,
         "The first number of the countdown, in seconds before the press."))
     page.countdownFrom:SetPoint("TOPLEFT", 24, -296)
+    local getLead, setLead = Option('countdownLead')
+    page.countdownLead = Add(ns:Slider(left, "Say each number early by (seconds)", COLUMN_W - 24, 0, 1.5, 0.1, getLead, setLead,
+        "Speech starts a moment after it is asked for. Raise this when the numbers come late, lower it when they come early."))
+    page.countdownLead:SetPoint("TOPLEFT", 24, -342)
 
     local right = CreateFrame("Frame", nil, frame)
     right:SetPoint("TOPRIGHT")

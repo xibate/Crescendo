@@ -225,11 +225,23 @@ function ns:ResetDisplay()
     end
 end
 
-function ns:SendTts(text)
+--Says a text. A countdown number is said faster than the reminders, and cuts off the number before it if that is still
+--being said, so the numbers can't queue up behind each other and fall behind
+local lastWasNumber = false
+function ns:SendTts(text, isNumber)
     local options = ns.db.options
-    if options.ttsEnabled then
-        C_VoiceChat.SpeakText(options.ttsVoice, text, options.ttsRate, options.ttsVolume)
+    if not options.ttsEnabled then
+        return
     end
+    local rate = options.ttsRate
+    if isNumber then
+        if lastWasNumber and C_VoiceChat.StopSpeakingText then
+            C_VoiceChat.StopSpeakingText()
+        end
+        rate = math.min(10, (rate or 0) + 4)
+    end
+    lastWasNumber = isNumber == true
+    C_VoiceChat.SpeakText(options.ttsVoice, text, rate, options.ttsVolume)
 end
 
 local PREVIEW = {
