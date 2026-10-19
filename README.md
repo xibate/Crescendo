@@ -10,11 +10,11 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
 
 ## The window
 
-`/cres` (or `/crescendo`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. A bar on the left switches between its five pages: Plans, Timeline, Ramps, Display and General. On Plans and Timeline the header along the top picks the raid, the boss, Heroic or Mythic and your spec, and both pages show the same selection. `/cres timeline`, `/cres ramps`, `/cres display` and `/cres general` open a page directly, `/cres review` shows the last pull's review, `/cres stop` stops a test. In a raid, the window opens on the boss you target, or else the next boss that isn't dead this lockout, on that difficulty and for your spec.
+`/cres` (or `/crescendo`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. The side bar on the left has the five pages (Plans, Timeline, Ramps, Display and General) and every raid with its bosses; the number next to a boss is how many lines its plan has for your spec and the difficulty. Click a raid's name to fold it away (the season 1 raids start folded). **<<** folds the side bar down to the page icons and a boss button, which opens the raids and bosses as a menu; **>>** opens it again. The header shows the selected boss with Heroic or Mythic and your spec, which Plans and Timeline share. `/cres timeline`, `/cres ramps`, `/cres display` and `/cres general` open a page directly, `/cres review` shows the last pull's review, `/cres stop` stops a test. In a raid, the window opens on the boss you target, or else the next boss that isn't dead this lockout, on that difficulty and for your spec.
 
 ### Plans
 
-1. In the header, pick the raid, the boss, the difficulty and your spec.
+1. Pick the boss in the side bar, and the difficulty and your spec in the header.
 2. For a boss with stages, the tabs over the list pick what is listed:
    - **All stages**: every ability once. What you assign there triggers in every stage.
    - **Stage 1**, **Intermission** and so on: the abilities of that stage. An ability that comes back in a later stage, like Spectral Coils in Ula'tek's intermission, is on the tab of every stage it happens in. What you assign there only triggers in that stage. Hover a tab for the stage's full name.
@@ -25,6 +25,7 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
    - Pick which casts, shown by their numbers: all casts, odd casts (1, 3, 5...), even casts (2, 4, 6...), every 3rd from the 1st, 2nd or 3rd, only the 1st, or **Pick casts...** to list casts like `2,4` or write a pattern like `every 4 from 2`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
 
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
+4. On the right, the selected ability's first assignment shows in each reminder style (icon, bar and text, with the one in use named), Next up shows the first presses of the recorded pull (or of the plan's times), and the ready check line shows what Crescendo would say about this boss's plan.
 
 Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage). **Plan text**, under the assignments, shows and edits the whole plan, including times after the pull and stages. Its **Copy to...** copies the plan to the other difficulty of the boss or to another boss of the raid; a plan that was there is replaced, and **Undo** brings it back. **History** keeps the last ten versions of each plan, saved before an import, a copy over it, taking times from a note, saving the plan text and editing assignments (one every ten minutes); pick one to put it back.
 
@@ -43,11 +44,11 @@ Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5
 
 ### Testing
 
-Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. The **Timeline** page shows the longest recorded pull of the selected boss and difficulty as a chart: the stages as bands, a lane for every ability with each cast numbered like your boss mod counts them, and a **You** lane with a diamond where each of your assignments lands. A ramp, spell or trinket used again before its cooldown is back has a red diamond; hover it for when it is back. The cooldowns are the ones the addon saw in the game with your talents; a spell it hasn't seen yet goes by its base cooldown until you cast it once out of combat.
+Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. The **Timeline** page shows the longest recorded pull of the selected boss and difficulty as a chart: a time bar with a tick every 10 seconds and the time every 30, the stages as bands with intermissions tinted, edged and named in the accent colour, a lane for every ability with each cast numbered like your boss mod counts them, and a **You** lane with a diamond where each of your assignments lands. A ramp, spell or trinket used again before its cooldown is back has a red diamond; hover it for when it is back. The cooldowns are the ones the addon saw in the game with your talents; a spell it hasn't seen yet goes by its base cooldown until you cast it once out of combat.
 
-Click a cast to select it. Below the chart you see what is assigned to it, as the same cards as on the Plans page, and your reminders in the 30 seconds before it. Pick how far a new assignment reaches, **This cast**, its **stage** or **All stages**, and click **+ Assign** to add one. The Plans page follows along: going back there shows the same ability on its stage.
+Click a cast to select it. Below the chart you see what is assigned to it, as the same cards as on the Plans page, and **Next up**: your presses coming from 5 seconds before the cast, with the seconds until each, and the next reminder. Pick how far a new assignment reaches, **This cast**, its **stage** or **All stages**, and click **+ Assign** to add one. The Plans page follows along: going back there shows the same ability on its stage.
 
-**Replay pull**, or **Replay from** a selected cast (5 seconds before it), runs the pull again with your plan, so its reminders show and speak as they would in the raid, anywhere, also while hitting a target dummy, and a line on the chart follows along. **Test cast** on the Plans page pretends a cast of the selected ability is coming in a number of seconds, which works without a recorded pull.
+**Replay pull**, or **Replay from** a selected cast (5 seconds before it), runs the pull again with your plan, so its reminders show and speak as they would in the raid, anywhere, also while hitting a target dummy. A line on the chart follows along with the time on the time bar, and Next up follows the line. **Test cast** on the Plans page pretends a cast of the selected ability is coming in a number of seconds, which works without a recorded pull.
 
 ### Ramps and Display
 

@@ -1,20 +1,23 @@
 local _, ns = ...
 
---The addon's window (/cres): a rail on the left with the pages (Plans, Timeline, Ramps, Display, General), a header
---bar along the top and the page below it. Plans and Timeline share the header's raid, boss, difficulty and spec, the
---other pages show their name there. Pages register with ns:RegisterPage and are built the first time they show
+--The addon's window (/cres): a side bar on the left with the pages (Plans, Timeline, Ramps, Display, General) and the
+--raids and bosses, a header along the top and the page below it. The side bar folds down to icons and a boss button.
+--Plans and Timeline share the selected boss, difficulty and spec, the other pages show their name in the header.
+--Pages register with ns:RegisterPage and are built the first time they show
 
 local theme = ns.theme
-local WIDTH, HEIGHT = 1024, 680
-local RAIL = 64
+local WIDTH, HEIGHT = 1320, 720
+local SIDE_OPEN, SIDE_FOLDED = 210, 52
 local HEADER = 50
+local ROW_H = 26
+local MEDIA = "Interface/Addons/Crescendo/Media/"
 ns.windowPadding = 14
 
 local window
 local pages = {}
 
---build(frame) creates the page in its frame, refresh() redraws it from the saved settings. info.icon is the rail's icon
---in Media, info.bossBar shows the raid, boss, difficulty and spec in the header
+--build(frame) creates the page in its frame, refresh() redraws it from the saved settings. info.icon is the page's
+--icon in Media, info.bossBar shows the boss, difficulty and spec in the header
 function ns:RegisterPage(key, title, order, build, refresh, info)
     info = info or {}
     table.insert(pages, { key = key, title = title, order = order, build = build, refresh = refresh, icon = info.icon,
@@ -36,13 +39,17 @@ end
 
 local function UpdateNav()
     local r, g, b = ns:GetAccent()
-    for _, button in ipairs(window.nav) do
-        local active = button.key == UI().page
-        local alpha = active and 1 or (button.hover and 0.85 or 0.5)
-        button.label:SetTextColor(1, 1, 1, alpha)
-        button.icon:SetVertexColor(1, 1, 1, alpha)
-        button.bar:SetColorTexture(r, g, b, active and 1 or 0)
-        button.background:SetColorTexture(1, 1, 1, active and 0.05 or (button.hover and 0.03 or 0))
+    for _, list in ipairs({ window.nav, window.navIcons }) do
+        for _, button in ipairs(list) do
+            local active = button.key == UI().page
+            local alpha = active and 1 or (button.hover and 0.85 or 0.5)
+            if button.label then
+                button.label:SetTextColor(1, 1, 1, alpha)
+            end
+            button.icon:SetVertexColor(1, 1, 1, alpha)
+            button.bar:SetColorTexture(r, g, b, active and 1 or 0)
+            button.background:SetColorTexture(1, 1, 1, active and 0.05 or (button.hover and 0.03 or 0))
+        end
     end
 end
 
@@ -77,7 +84,10 @@ function ns:SetPageTestHandler(key, handler)
     PageInfo(key).onTestChanged = handler
 end
 
---The header bar of Plans and Timeline: Raid / Boss, difficulty and spec
+------------------------------------------------------------------------------------------------------------------------
+-- The selected boss
+------------------------------------------------------------------------------------------------------------------------
+
 local function Selection()
     local ui = UI()
     if not ns.bosses[ui.boss or 0] then
@@ -94,45 +104,248 @@ local function SelectBoss(encounterId)
     if ui.boss ~= encounterId then
         ui.boss, ui.ability, ui.abilityScope, ui.timelineCast = encounterId, nil, nil, nil
     end
+    ns:CloseMenu()
     ns:RefreshWindow()
 end
 
-local function BuildBossBar(parent)
-    local bar = CreateFrame("Frame", nil, parent)
-    bar:SetHeight(HEADER)
-    bar.raid = ns:Dropdown(bar, 160, 28, function() return select(2, Selection()).raid end, function()
-        local items = { { text = "Raids", header = true } }
-        for _, raid in ipairs(ns.raids) do
-            table.insert(items, { text = raid.name, value = raid.name })
+--Raids are folded and unfolded by clicking their name. A raid starts folded when Config/Bosses.lua says so
+local function RaidFolded(raid)
+    local ui = UI()
+    ui.foldedRaids = ui.foldedRaids or {}
+    if ui.foldedRaids[raid.name] == nil then
+        ui.foldedRaids[raid.name] = raid.collapsed == true
+    end
+    return ui.foldedRaids[raid.name]
+end
+
+--How many lines the plan of a boss has, for the selected spec and difficulty
+local function PlanCount(encounterId)
+    local plan = ns:ParsePlan(ns:GetPlan(ns:SelectedSpec(), ns.difficulties[UI().difficulty].slug, encounterId))
+    return #plan.times + #plan.abilities
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- The side bar
+------------------------------------------------------------------------------------------------------------------------
+
+local function Edge(frame)
+    local edge = frame:CreateTexture(nil, "BORDER")
+    edge:SetWidth(1)
+    edge:SetPoint("TOPRIGHT")
+    edge:SetPoint("BOTTOMRIGHT")
+    edge:SetColorTexture(1, 1, 1, 0.08)
+end
+
+local function PageButton(parent, page, folded)
+    local button = CreateFrame("Button", nil, parent)
+    button.background = ns:Fill(button, { 1, 1, 1, 0 })
+    button.bar = button:CreateTexture(nil, "ARTWORK")
+    button.bar:SetWidth(2)
+    button.bar:SetPoint("TOPLEFT")
+    button.bar:SetPoint("BOTTOMLEFT")
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetTexture(MEDIA .. (page.icon or "rail-plans"))
+    if folded then
+        button:SetSize(SIDE_FOLDED, 40)
+        button.icon:SetSize(20, 20)
+        button.icon:SetPoint("CENTER")
+        ns:Tooltip(button, page.title)
+    else
+        button:SetHeight(30)
+        button.icon:SetSize(16, 16)
+        button.icon:SetPoint("LEFT", 14, 0)
+        button.label = ns:Text(button, 12)
+        button.label:SetPoint("LEFT", button.icon, "RIGHT", 10, 0)
+        button.label:SetText(page.title)
+    end
+    button.key = page.key
+    button:SetScript("OnClick", function() ns:ShowPage(page.key) end)
+    button:HookScript("OnEnter", function(self) self.hover = true UpdateNav() end)
+    button:HookScript("OnLeave", function(self) self.hover = false UpdateNav() end)
+    return button
+end
+
+--The open side bar: the pages, then the raids with their bosses and how many plan lines each has
+local function BuildOpenSide(frame)
+    local side = CreateFrame("Frame", nil, frame)
+    side:SetPoint("TOPLEFT", 1, -1)
+    side:SetPoint("BOTTOMLEFT", 1, 1)
+    side:SetWidth(SIDE_OPEN)
+    ns:Fill(side, { 0, 0, 0, 0.25 })
+    Edge(side)
+    local logo = side:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(24, 24)
+    logo:SetPoint("TOPLEFT", 12, -12)
+    logo:SetTexture(MEDIA .. "logo")
+    local name = ns:Text(side, 14)
+    name:SetPoint("LEFT", logo, "RIGHT", 8, 0)
+    name:SetText("Crescendo")
+    name:SetTextColor(ns:GetAccent())
+    window.fold = ns:Button(side, "<<", 24, 24, function() ns:SetSideFolded(true) end)
+    window.fold:SetPoint("TOPRIGHT", -8, -12)
+    ns:Tooltip(window.fold, "Fold the side bar", "Leaves the page icons and a boss button, for more room.")
+    local y = -48
+    for _, page in ipairs(pages) do
+        local button = PageButton(side, page, false)
+        button:SetPoint("TOPLEFT", 1, y)
+        button:SetPoint("RIGHT", side, "RIGHT", -1, 0)
+        table.insert(window.nav, button)
+        y = y - 30
+    end
+    local rule = side:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", 0, y - 8)
+    rule:SetPoint("TOPRIGHT", -1, y - 8)
+    rule:SetColorTexture(1, 1, 1, 0.08)
+
+    local list = ns:ScrollList(side)
+    list:SetPoint("TOPLEFT", 1, y - 14)
+    list:SetPoint("BOTTOMRIGHT", -2, 4)
+    window.bossList = list
+    window.raidHeaders, window.bossRows = {}, {}
+    for index, raid in ipairs(ns.raids) do
+        local header = ns:FoldHeader(list.content, 24)
+        header.label:SetText(raid.name:upper())
+        header.raid = raid
+        header:SetScript("OnClick", function()
+            UI().foldedRaids[raid.name] = not header.folded
+            ns:RefreshBossBar()
+        end)
+        window.raidHeaders[index] = header
+        for _, boss in ipairs(raid.bosses) do
+            local row = ns:ListRow(list.content, ROW_H)
+            row.label:SetPoint("LEFT", 22, 0)
+            row.label:SetPoint("RIGHT", -30, 0)
+            row.label:SetText(boss.name)
+            row.badge = ns:Text(row, 11, theme.text, "RIGHT")
+            row.badge:SetPoint("RIGHT", -10, 0)
+            row.encounterId = boss.encounterId
+            row:SetScript("OnClick", function() SelectBoss(boss.encounterId) end)
+            window.bossRows[boss.encounterId] = row
         end
-        return items
-    end, function(raidName)
-        for _, raid in ipairs(ns.raids) do
-            if raid.name == raidName and ns.bosses[UI().boss].raid ~= raidName then
-                SelectBoss(raid.bosses[1].encounterId)
+    end
+    return side
+end
+
+--Bosses to pick from when the side bar is folded: the unfolded raids with their bosses, a folded raid unfolds when
+--picked
+local function BossMenuItems()
+    local _, current = Selection()
+    local items = {}
+    for _, raid in ipairs(ns.raids) do
+        if RaidFolded(raid) and raid.name ~= current.raid then
+            table.insert(items, { text = "+ " .. raid.name, value = { raid = raid.name } })
+        else
+            table.insert(items, { text = raid.name, header = true })
+            for _, boss in ipairs(raid.bosses) do
+                local count = PlanCount(boss.encounterId)
+                table.insert(items, { text = boss.name .. (count > 0 and ("  |cff0cd29f" .. count .. "|r") or ""), value = boss.encounterId })
             end
         end
-    end, 'plain')
-    bar.raid:SetPoint("LEFT", 0, 0)
-    bar.raid.label:SetTextColor(1, 1, 1, 0.6)
-    local slash = ns:Text(bar, 13, theme.section)
-    slash:SetPoint("LEFT", bar.raid, "RIGHT", 4, 0)
-    slash:SetText("/")
-    bar.boss = ns:Dropdown(bar, 170, 30, function() return select(2, Selection()).name end, function()
+    end
+    return items
+end
+
+local function OpenBossMenu()
+    ns:OpenMenu(window.bossButton, BossMenuItems(), function(value)
+        if type(value) == 'table' then
+            UI().foldedRaids[value.raid] = false
+            OpenBossMenu()
+        else
+            SelectBoss(value)
+        end
+    end)
+end
+
+--The folded side bar: the logo, the pages as icons and a button with the boss's initial that opens the boss menu
+local function BuildFoldedSide(frame)
+    local side = CreateFrame("Frame", nil, frame)
+    side:SetPoint("TOPLEFT", 1, -1)
+    side:SetPoint("BOTTOMLEFT", 1, 1)
+    side:SetWidth(SIDE_FOLDED)
+    ns:Fill(side, { 0, 0, 0, 0.25 })
+    Edge(side)
+    local logo = side:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(26, 26)
+    logo:SetPoint("TOP", 0, -12)
+    logo:SetTexture(MEDIA .. "logo")
+    window.unfold = ns:Button(side, ">>", 28, 22, function() ns:SetSideFolded(false) end)
+    window.unfold:SetPoint("TOP", 0, -44)
+    ns:Tooltip(window.unfold, "Open the side bar", "Shows the page names and the raids with their bosses.")
+    local y = -74
+    for _, page in ipairs(pages) do
+        local button = PageButton(side, page, true)
+        button:SetPoint("TOPLEFT", 0, y)
+        table.insert(window.navIcons, button)
+        y = y - 42
+    end
+    local rule = side:CreateTexture(nil, "ARTWORK")
+    rule:SetSize(28, 1)
+    rule:SetPoint("TOP", 0, y - 6)
+    rule:SetColorTexture(1, 1, 1, 0.1)
+    window.bossButton = ns:Button(side, "", 36, 36, OpenBossMenu, true)
+    window.bossButton:SetPoint("TOP", 0, y - 16)
+    window.bossButton.label:SetFont(ns:GetFont(), 15, "")
+    ns:Tooltip(window.bossButton, function(tooltip)
         local _, boss = Selection()
-        local items = {}
-        for _, raid in ipairs(ns.raids) do
-            if raid.name == boss.raid then
-                table.insert(items, { text = raid.name, header = true })
-                for _, raidBoss in ipairs(raid.bosses) do
-                    table.insert(items, { text = raidBoss.name, value = raidBoss.encounterId })
-                end
-            end
-        end
-        return items
-    end, SelectBoss)
-    bar.boss:SetPoint("LEFT", slash, "RIGHT", 8, 0)
-    bar.boss.label:SetFont(ns:GetFont(), 13, "")
+        tooltip:SetText(boss.name, 1, 1, 1)
+        tooltip:AddLine(boss.raid, 0.7, 0.7, 0.7)
+        tooltip:AddLine("Click to pick another boss", ns:GetAccent())
+    end)
+    local label = ns:SectionLabel(side, "Boss")
+    label:SetPoint("TOP", window.bossButton, "BOTTOM", 0, -4)
+    return side
+end
+
+--Shows the open or the folded side bar, with the header and the page next to it
+local function LayOut()
+    local folded = UI().sideFolded == true
+    local width = folded and SIDE_FOLDED or SIDE_OPEN
+    window.openSide:SetShown(not folded)
+    window.foldedSide:SetShown(folded)
+    window.header:ClearAllPoints()
+    window.header:SetPoint("TOPLEFT", width + 1, 0)
+    window.header:SetPoint("TOPRIGHT", 0, 0)
+    window.rule:ClearAllPoints()
+    window.rule:SetPoint("TOPLEFT", width + 1, -HEADER)
+    window.rule:SetPoint("TOPRIGHT", -1, -HEADER)
+    window.content:ClearAllPoints()
+    window.content:SetPoint("TOPLEFT", width + 1 + ns.windowPadding, -HEADER - 12)
+    window.content:SetPoint("BOTTOMRIGHT", -ns.windowPadding, ns.windowPadding)
+end
+
+--The width the pages have, with the side bar open or folded
+function ns:WindowContentWidth()
+    local folded = UI().sideFolded == true
+    return WIDTH - (folded and SIDE_FOLDED or SIDE_OPEN) - 1 - 2 * ns.windowPadding
+end
+
+function ns:SetSideFolded(folded)
+    UI().sideFolded = folded or nil
+    ns:CloseMenu()
+    LayOut()
+    ns:RefreshWindow()
+end
+
+------------------------------------------------------------------------------------------------------------------------
+-- The header
+------------------------------------------------------------------------------------------------------------------------
+
+--The boss and its raid on the left, difficulty and spec on the right
+local function BuildBossBar(header)
+    local bar = CreateFrame("Frame", nil, header)
+    bar:SetAllPoints()
+    bar.bossName = ns:Text(bar, 16)
+    bar.bossName:SetPoint("LEFT", 16, 0)
+    bar.raidName = ns:Text(bar, 11, theme.dim)
+    bar.raidName:SetPoint("LEFT", bar.bossName, "RIGHT", 10, -1)
+    bar.spec = ns:Dropdown(bar, 140, 28, function() return ns.specNames[ns:SelectedSpec()] end,
+        function() return ns:SpecMenuItems() end, function(specKey)
+            UI().spec = specKey
+            UI().ability = nil
+            ns:RefreshWindow()
+        end)
+    bar.spec:SetPoint("RIGHT", -44, 0)
     bar.difficulty = ns:Segmented(bar, {
         { text = ns.difficulties[15].name, value = 15 },
         { text = ns.difficulties[16].name, value = 16 }
@@ -140,45 +353,52 @@ local function BuildBossBar(parent)
         UI().difficulty = diffId
         ns:RefreshWindow()
     end)
-    bar.difficulty:SetPoint("LEFT", bar.boss, "RIGHT", 10, 0)
-    bar.spec = ns:Dropdown(bar, 140, 28, function() return ns.specNames[ns:SelectedSpec()] end,
-        function() return ns:SpecMenuItems() end, function(specKey)
-            UI().spec = specKey
-            UI().ability = nil
-            ns:RefreshWindow()
-        end)
-    bar.spec:SetPoint("LEFT", bar.difficulty, "RIGHT", 10, 0)
+    bar.difficulty:SetPoint("RIGHT", bar.spec, "LEFT", -10, 0)
     function bar:Refresh()
-        Selection()
-        self.raid:Refresh()
-        self.boss:Refresh()
+        local _, boss = Selection()
+        self.bossName:SetText(boss.name)
+        self.raidName:SetText(boss.raid)
         self.difficulty:Refresh()
         self.spec:Refresh()
     end
     return bar
 end
 
-local function NavButton(parent, page, y)
-    local button = CreateFrame("Button", nil, parent)
-    button:SetSize(RAIL, 56)
-    button:SetPoint("TOPLEFT", 0, y)
-    button.background = ns:Fill(button, { 1, 1, 1, 0 })
-    button.bar = button:CreateTexture(nil, "ARTWORK")
-    button.bar:SetWidth(2)
-    button.bar:SetPoint("TOPLEFT")
-    button.bar:SetPoint("BOTTOMLEFT")
-    button.icon = button:CreateTexture(nil, "ARTWORK")
-    button.icon:SetSize(22, 22)
-    button.icon:SetPoint("TOP", 0, -9)
-    button.icon:SetTexture("Interface/Addons/Crescendo/Media/" .. (page.icon or "rail-plans"))
-    button.label = ns:Text(button, 10, theme.text, "CENTER")
-    button.label:SetPoint("BOTTOM", 0, 8)
-    button.label:SetText(page.title)
-    button.key = page.key
-    button:SetScript("OnClick", function() ns:ShowPage(page.key) end)
-    button:SetScript("OnEnter", function(self) self.hover = true UpdateNav() end)
-    button:SetScript("OnLeave", function(self) self.hover = false UpdateNav() end)
-    return button
+--The side bar's bosses and the header, after the boss, difficulty or a plan changed
+function ns:RefreshBossBar()
+    if not window then
+        return
+    end
+    local selected, boss = Selection()
+    window.bossBar:Refresh()
+    window.bossButton.label:SetText(boss.name:sub(1, 1):upper())
+    local list = window.bossList
+    local y = 0
+    for index, raid in ipairs(ns.raids) do
+        local header = window.raidHeaders[index]
+        local folded = RaidFolded(raid)
+        header:SetFolded(folded)
+        header:SetHighlighted(folded and boss.raid == raid.name)
+        header:ClearAllPoints()
+        header:SetPoint("TOPLEFT", 0, y)
+        header:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+        y = y - 24
+        for _, raidBoss in ipairs(raid.bosses) do
+            local row = window.bossRows[raidBoss.encounterId]
+            row:SetSelected(raidBoss.encounterId == selected)
+            row:SetShown(not folded)
+            if not folded then
+                local count = PlanCount(raidBoss.encounterId)
+                row.badge:SetText(count > 0 and tostring(count) or '')
+                row.badge:SetTextColor(ns:GetAccent())
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", 0, y)
+                row:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+                y = y - ROW_H
+            end
+        end
+    end
+    list:SetContentHeight(-y)
 end
 
 local function CreateWindow()
@@ -202,67 +422,31 @@ local function CreateWindow()
     table.insert(UISpecialFrames, "CrescendoWindow")
     ns:Fill(frame, theme.window)
     ns:Border(frame, theme.border)
-    window = { frame = frame, nav = {}, pageFrames = {} }
+    window = { frame = frame, nav = {}, navIcons = {}, pageFrames = {} }
+    window.openSide = BuildOpenSide(frame)
+    window.foldedSide = BuildFoldedSide(frame)
 
-    --The rail: the logo and a button per page
-    local rail = CreateFrame("Frame", nil, frame)
-    rail:SetPoint("TOPLEFT", 1, -1)
-    rail:SetPoint("BOTTOMLEFT", 1, 1)
-    rail:SetWidth(RAIL)
-    ns:Fill(rail, { 0, 0, 0, 0.25 })
-    local edge = rail:CreateTexture(nil, "BORDER")
-    edge:SetWidth(1)
-    edge:SetPoint("TOPRIGHT")
-    edge:SetPoint("BOTTOMRIGHT")
-    edge:SetColorTexture(1, 1, 1, 0.08)
-    local logo = rail:CreateTexture(nil, "ARTWORK")
-    logo:SetSize(30, 30)
-    logo:SetPoint("TOP", 0, -12)
-    logo:SetTexture("Interface/Addons/Crescendo/Media/logo")
-    window.rail = rail
-    local y = -54
-    for _, page in ipairs(pages) do
-        table.insert(window.nav, NavButton(rail, page, y))
-        y = y - 58
-    end
-
-    --The header: the boss bar or the page's name, and on the right the test that runs and the close button
+    --The header: the boss or the page's name, the test that runs, and the close button
     local header = CreateFrame("Frame", nil, frame)
-    header:SetPoint("TOPLEFT", RAIL + 1, 0)
-    header:SetPoint("TOPRIGHT", 0, 0)
     header:SetHeight(HEADER)
     window.header = header
     window.title = ns:Text(header, 15)
     window.title:SetPoint("LEFT", 16, 0)
     window.bossBar = BuildBossBar(header)
-    window.bossBar:SetPoint("LEFT", 10, 0)
-    window.bossBar:SetPoint("RIGHT", header, "RIGHT", -300, 0)
-
     local close = ns:Button(header, "x", 24, 24, function() frame:Hide() end)
     close:SetPoint("RIGHT", -12, 0)
+    window.testStatus = ns:Text(header, 11, theme.dim)
+    window.testStatus:SetPoint("LEFT", 380, 0)
+    window.testStatus:SetWidth(190)
     window.stopTest = ns:Button(header, "Stop test", 84, 24, function() ns:StopTest() end, true)
-    window.stopTest:SetPoint("RIGHT", close, "LEFT", -8, 0)
-    window.testStatus = ns:Text(header, 11, theme.dim, "RIGHT")
-    window.testStatus:SetPoint("RIGHT", window.stopTest, "LEFT", -10, 0)
-    window.testStatus:SetWidth(180)
+    window.stopTest:SetPoint("LEFT", window.testStatus, "RIGHT", 8, 0)
 
-    local rule = frame:CreateTexture(nil, "ARTWORK")
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", RAIL + 1, -HEADER)
-    rule:SetPoint("TOPRIGHT", -1, -HEADER)
-    rule:SetColorTexture(1, 1, 1, 0.08)
-
+    window.rule = frame:CreateTexture(nil, "ARTWORK")
+    window.rule:SetHeight(1)
+    window.rule:SetColorTexture(1, 1, 1, 0.08)
     window.content = CreateFrame("Frame", nil, frame)
-    window.content:SetPoint("TOPLEFT", RAIL + 1 + ns.windowPadding, -HEADER - 12)
-    window.content:SetPoint("BOTTOMRIGHT", -ns.windowPadding, ns.windowPadding)
+    LayOut()
     ns:RefreshTestStatus()
-end
-
---The header bar's raid, boss, difficulty and spec, after they changed somewhere else
-function ns:RefreshBossBar()
-    if window then
-        window.bossBar:Refresh()
-    end
 end
 
 function ns:ShowPage(key)
@@ -280,9 +464,7 @@ function ns:ShowPage(key)
     window.bossBar:SetShown(page.bossBar == true)
     window.title:SetShown(not page.bossBar)
     window.title:SetText(page.title)
-    if page.bossBar then
-        window.bossBar:Refresh()
-    end
+    ns:RefreshBossBar()
     UpdateNav()
     ns:CloseMenu()
     page.refresh()
@@ -326,6 +508,9 @@ function ns:SelectCurrentBoss()
         ui.difficulty = difficultyId
     end
     ui.spec = ns:GetPlayerSpecKey() or ui.spec
+    --Unfold the boss's raid in the side bar
+    ui.foldedRaids = ui.foldedRaids or {}
+    ui.foldedRaids[ns.bosses[boss].raid] = false
 end
 
 function ns:ToggleWindow(key)
@@ -339,11 +524,8 @@ end
 --Redraws the page that shows, after something changed outside it
 function ns:RefreshWindow()
     if window and window.frame:IsShown() then
-        local page = PageInfo(UI().page)
-        if page.bossBar then
-            window.bossBar:Refresh()
-        end
-        page.refresh()
+        ns:RefreshBossBar()
+        PageInfo(UI().page).refresh()
     end
 end
 

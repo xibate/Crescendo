@@ -9,14 +9,13 @@ local theme = ns.theme
 local kit
 local NAME_W = 150
 local TOOLBAR_H = 36
-local TICKS_H = 18
-local STAGE_H = 22
+local RULER_H = 26
+local STAGE_H = 26
 local LANE_H = 28
 local YOU_H = 34
 local PANEL_H = 214
 local LEFT_W = 240
-local RIGHT_W = 210
-local CONTENT_W = 932
+local RIGHT_W = 260
 local DIAMOND = "Interface/Addons/Crescendo/Media/diamond"
 
 local page
@@ -133,12 +132,9 @@ end
 -- Building
 ------------------------------------------------------------------------------------------------------------------------
 
+--The width of the lanes' tracks, from the window's layout so it is right straight after the side bar folds
 local function TrackWidth()
-    local width = page.frame:GetWidth()
-    if not width or width < 400 then
-        width = CONTENT_W
-    end
-    return width - NAME_W - 16
+    return ns:WindowContentWidth() - NAME_W - 16
 end
 
 --Where a time is on the lanes, from the left of the chart
@@ -176,15 +172,25 @@ local function BuildChart(frame)
     ns:Fill(chart, theme.well)
     ns:Border(chart, theme.border)
     page.chart = chart
-    page.bands, page.ticks, page.stageLabels = {}, {}, {}
+    page.bands, page.edges, page.stageLabels, page.stageBoxes = {}, {}, {}, {}
+    page.minorTicks, page.majorTicks, page.tickLabels = {}, {}, {}
 
+    --The time bar: a tick every 10 seconds, a longer one with the time every 30
     page.ticksRow = CreateFrame("Frame", nil, chart)
     page.ticksRow:SetPoint("TOPLEFT", 0, 0)
     page.ticksRow:SetPoint("TOPRIGHT", 0, 0)
-    page.ticksRow:SetHeight(TICKS_H)
+    page.ticksRow:SetHeight(RULER_H)
+    ns:Fill(page.ticksRow, { 1, 1, 1, 0.02 })
+    local timeName = ns:SectionLabel(page.ticksRow, "Time")
+    timeName:SetPoint("LEFT", 10, 0)
+    local ruleTime = page.ticksRow:CreateTexture(nil, "ARTWORK")
+    ruleTime:SetHeight(1)
+    ruleTime:SetPoint("BOTTOMLEFT")
+    ruleTime:SetPoint("BOTTOMRIGHT")
+    ruleTime:SetColorTexture(1, 1, 1, 0.1)
     page.stageRow = CreateFrame("Frame", nil, chart)
-    page.stageRow:SetPoint("TOPLEFT", 0, -TICKS_H)
-    page.stageRow:SetPoint("TOPRIGHT", 0, -TICKS_H)
+    page.stageRow:SetPoint("TOPLEFT", 0, -RULER_H)
+    page.stageRow:SetPoint("TOPRIGHT", 0, -RULER_H)
     page.stageRow:SetHeight(STAGE_H)
     local stageName = ns:SectionLabel(page.stageRow, "Stage")
     stageName:SetPoint("LEFT", 10, 0)
@@ -195,7 +201,7 @@ local function BuildChart(frame)
     rule:SetColorTexture(1, 1, 1, 0.06)
 
     page.lanesList = ns:ScrollList(chart)
-    page.lanesList:SetPoint("TOPLEFT", 0, -TICKS_H - STAGE_H)
+    page.lanesList:SetPoint("TOPLEFT", 0, -RULER_H - STAGE_H)
     page.lanesList:SetPoint("BOTTOMRIGHT", 0, YOU_H)
     page.lanes, page.markers = {}, {}
 
@@ -217,9 +223,20 @@ local function BuildChart(frame)
     page.overlay = CreateFrame("Frame", nil, chart)
     page.overlay:SetAllPoints()
     page.overlay:SetFrameLevel((chart:GetFrameLevel() or 1) + 20)
+    page.glow = page.overlay:CreateTexture(nil, "ARTWORK")
+    page.glow:SetWidth(8)
+    page.glow:Hide()
     page.playhead = page.overlay:CreateTexture(nil, "OVERLAY")
-    page.playhead:SetWidth(1)
+    page.playhead:SetWidth(2)
     page.playhead:Hide()
+    page.bubble = CreateFrame("Frame", nil, page.overlay)
+    page.bubble:SetSize(40, 16)
+    page.bubble.fill = ns:Fill(page.bubble, { 1, 1, 1, 1 })
+    page.bubble.text = page.bubble:CreateFontString(nil, "OVERLAY")
+    page.bubble.text:SetFont(ns:GetFont(), 10, "")
+    page.bubble.text:SetTextColor(0.03, 0.07, 0.05, 1)
+    page.bubble.text:SetPoint("CENTER")
+    page.bubble:Hide()
 
     page.empty = ns:Text(frame, 13, theme.dim)
     page.empty:SetPoint("TOPLEFT", 0, -TOOLBAR_H - 16)
@@ -410,88 +427,148 @@ local function BuildPanel(frame)
     page.assign = ns:Button(middle, "+ Assign to this cast", 190, 28, function() page.Assign() end, true)
     page.assign:SetPoint("BOTTOMLEFT", 0, 0)
 
-    --Right: your reminders leading up to it
+    --Right: what comes next from the line on the chart, or from just before the selected cast
     local right = CreateFrame("Frame", nil, panel)
     right:SetPoint("TOPRIGHT", 0, 0)
     right:SetPoint("BOTTOMRIGHT", 0, 0)
     right:SetWidth(RIGHT_W)
-    ns:SectionLabel(right, "Your reminders before it"):SetPoint("TOPLEFT", 0, 0)
-    page.reminderRows = {}
-    for index = 1, 6 do
+    page.nextLabel = ns:SectionLabel(right, "Next up")
+    page.nextLabel:SetPoint("TOPLEFT", 0, 0)
+    local function Row(y, height)
         local row = CreateFrame("Frame", nil, right)
-        row:SetHeight(24)
-        row:SetPoint("TOPLEFT", 0, -18 - (index - 1) * 26)
+        row:SetHeight(height)
+        row:SetPoint("TOPLEFT", 0, y)
         row:SetPoint("RIGHT", right, "RIGHT", 0, 0)
-        row.background = ns:Fill(row, { 0, 0, 0, 0.3 })
+        row.background = ns:Fill(row, { 0, 0, 0, 0.35 })
         row.bar = row:CreateTexture(nil, "ARTWORK")
         row.bar:SetWidth(2)
         row.bar:SetPoint("TOPLEFT")
         row.bar:SetPoint("BOTTOMLEFT")
         row.icon = row:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(16, 16)
+        row.icon:SetSize(height - 8, height - 8)
         row.icon:SetPoint("LEFT", 8, 0)
         row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-        row.time = ns:Text(row, 11, theme.text, "RIGHT")
+        row.time = ns:Text(row, 12, theme.text, "RIGHT")
         row.time:SetPoint("RIGHT", -8, 0)
         row.label = ns:Text(row, 11)
         row.label:SetPoint("LEFT", row.icon, "RIGHT", 7, 0)
         row.label:SetPoint("RIGHT", row.time, "LEFT", -6, 0)
-        page.reminderRows[index] = row
+        return row
     end
-    page.remindersEmpty = ns:Text(right, 11, theme.dim)
-    page.remindersEmpty:SetPoint("TOPLEFT", 0, -20)
-    page.remindersEmpty:SetPoint("RIGHT", right, "RIGHT", 0, 0)
-    page.remindersEmpty:SetWordWrap(true)
+    page.nextRows = {}
+    for index = 1, 4 do
+        page.nextRows[index] = Row(-18 - (index - 1) * 26, 24)
+    end
+    page.nextEmpty = ns:Text(right, 11, theme.dim)
+    page.nextEmpty:SetPoint("TOPLEFT", 0, -20)
+    page.nextEmpty:SetPoint("RIGHT", right, "RIGHT", 0, 0)
+    page.nextEmpty:SetWordWrap(true)
+    page.nextEmpty:SetText("Nothing more of yours after this.")
+    ns:SectionLabel(right, "Next reminder"):SetPoint("TOPLEFT", 0, -134)
+    page.nextReminder = Row(-152, 30)
+    page.nextReminder.background:SetColorTexture(theme.window[1], theme.window[2], theme.window[3], 1)
+    page.nextReminder.fill = page.nextReminder:CreateTexture(nil, "BORDER")
+    page.nextReminder.fill:SetPoint("TOPLEFT", page.nextReminder.icon, "TOPRIGHT", 0, 4)
+    page.nextReminder.fill:SetPoint("BOTTOMLEFT", page.nextReminder.icon, "BOTTOMRIGHT", 0, -4)
+    page.nextReminder.fill:SetWidth(90)
+    local note = ns:Text(right, 10, theme.dim)
+    note:SetPoint("BOTTOMLEFT", 0, 0)
+    note:SetPoint("RIGHT", right, "RIGHT", 0, 0)
+    note:SetWordWrap(true)
+    note:SetText("From the line on the chart while a replay runs, otherwise from 5 seconds before the selected cast.")
 end
 
 ------------------------------------------------------------------------------------------------------------------------
 -- Drawing
 ------------------------------------------------------------------------------------------------------------------------
 
-local function DrawStages(stages, boss)
-    for _, band in ipairs(page.bands) do
-        band:Hide()
+--A stage's name over its band: '1 · FURY OF THE SERPENT MOTHER', or 'INTERMISSION'
+local function StageLabel(boss, stage)
+    if kit.IsIntermission(stage) then
+        return kit.ShortStageName(boss, stage):upper()
     end
-    for _, label in ipairs(page.stageLabels) do
-        label:Hide()
+    local name = kit.HasStages(boss) and kit.StageName(boss, stage) or nil
+    local rest = name and name:match(":%s*(.+)$")
+    return (stage .. (rest and (" · " .. rest) or "")):upper()
+end
+
+local function DrawStages(stages, boss)
+    for _, pool in ipairs({ page.bands, page.edges, page.stageLabels, page.stageBoxes }) do
+        for _, item in ipairs(pool) do
+            item:Hide()
+        end
     end
     local r, g, b = ns:GetAccent()
+    local edges, boxes = 0, 0
     for index, stage in ipairs(stages) do
         local finish = stages[index + 1] and stages[index + 1].at or page.duration
         local x, width = X(stage.at), math.max(1, X(finish) - X(stage.at))
+        local intermission = kit.IsIntermission(stage.stage)
         local band = Pooled(page.bands, index, function() return page.chart:CreateTexture(nil, "BACKGROUND", nil, 1) end)
         band:ClearAllPoints()
-        band:SetPoint("TOPLEFT", page.chart, "TOPLEFT", x, -TICKS_H)
+        band:SetPoint("TOPLEFT", page.chart, "TOPLEFT", x, -RULER_H)
         band:SetPoint("BOTTOMLEFT", page.chart, "BOTTOMLEFT", x, 1)
         band:SetWidth(width)
-        if kit.IsIntermission(stage.stage) then
-            band:SetColorTexture(r, g, b, 0.07)
-        else
-            band:SetColorTexture(1, 1, 1, index % 2 == 0 and 0.035 or 0.015)
-        end
         local label = Pooled(page.stageLabels, index, function() return ns:Text(page.stageRow, 10, theme.text) end)
         label:ClearAllPoints()
-        label:SetPoint("LEFT", page.stageRow, "LEFT", x + 6, 0)
-        label:SetWidth(math.max(1, width - 10))
-        label:SetText((kit.HasStages(boss) and kit.StageName(boss, stage.stage) or ("Stage " .. stage.stage)):upper())
-        if kit.IsIntermission(stage.stage) then
-            label:SetTextColor(r, g, b, 1)
+        label:SetText(StageLabel(boss, stage.stage))
+        if intermission then
+            --An intermission stands out: tinted, edged and its name on an accent box
+            band:SetColorTexture(r, g, b, 0.11)
+            for _, edgeX in ipairs({ x, x + width - 1 }) do
+                edges = edges + 1
+                local edge = Pooled(page.edges, edges, function() return page.chart:CreateTexture(nil, "BACKGROUND", nil, 2) end)
+                edge:ClearAllPoints()
+                edge:SetPoint("TOPLEFT", page.chart, "TOPLEFT", edgeX, -RULER_H)
+                edge:SetPoint("BOTTOMLEFT", page.chart, "BOTTOMLEFT", edgeX, 1)
+                edge:SetWidth(1)
+                edge:SetColorTexture(r, g, b, 0.7)
+            end
+            boxes = boxes + 1
+            local box = Pooled(page.stageBoxes, boxes, function() return page.stageRow:CreateTexture(nil, "ARTWORK") end)
+            box:ClearAllPoints()
+            box:SetPoint("LEFT", page.stageRow, "LEFT", x, 0)
+            box:SetSize(width, 18)
+            box:SetColorTexture(r, g, b, 0.9)
+            label:SetPoint("CENTER", box, "CENTER", 0, 0)
+            label:SetWidth(math.max(1, width - 4))
+            label:SetJustifyH("CENTER")
+            label:SetTextColor(0.03, 0.07, 0.05, 1)
         else
+            band:SetColorTexture(1, 1, 1, index % 2 == 0 and 0.035 or 0.015)
+            label:SetPoint("LEFT", page.stageRow, "LEFT", x + 6, 0)
+            label:SetWidth(math.max(1, width - 10))
+            label:SetJustifyH("LEFT")
             label:SetTextColor(1, 1, 1, 0.75)
         end
     end
-    --Minutes along the top, or half minutes for a short pull
-    for _, tick in ipairs(page.ticks) do
-        tick:Hide()
+    --The time bar
+    for _, pool in ipairs({ page.minorTicks, page.majorTicks, page.tickLabels }) do
+        for _, item in ipairs(pool) do
+            item:Hide()
+        end
     end
-    local step = page.duration >= 150 and 60 or 30
-    local index = 0
-    for at = 0, page.duration, step do
-        index = index + 1
-        local tick = Pooled(page.ticks, index, function() return ns:Text(page.ticksRow, 10, theme.section) end)
+    local minor, major = 0, 0
+    for at = 0, page.duration, 10 do
+        local isMajor = at % 30 == 0
+        local tick
+        if isMajor then
+            major = major + 1
+            tick = Pooled(page.majorTicks, major, function() return page.ticksRow:CreateTexture(nil, "ARTWORK") end)
+            tick:SetColorTexture(1, 1, 1, 0.35)
+            tick:SetSize(1, 7)
+            local label = Pooled(page.tickLabels, major, function() return ns:Text(page.ticksRow, 10, theme.dim, "CENTER") end)
+            label:ClearAllPoints()
+            label:SetPoint("BOTTOM", page.ticksRow, "BOTTOMLEFT", X(at) + (at == 0 and 14 or 0), 9)
+            label:SetText(ns:FormatTime(at))
+        else
+            minor = minor + 1
+            tick = Pooled(page.minorTicks, minor, function() return page.ticksRow:CreateTexture(nil, "ARTWORK") end)
+            tick:SetColorTexture(1, 1, 1, 0.14)
+            tick:SetSize(1, 4)
+        end
         tick:ClearAllPoints()
-        tick:SetPoint("LEFT", page.ticksRow, "LEFT", X(at) - (at == 0 and 0 or 12), 0)
-        tick:SetText(ns:FormatTime(at))
+        tick:SetPoint("BOTTOMLEFT", page.ticksRow, "BOTTOMLEFT", X(at), 1)
     end
 end
 
@@ -562,7 +639,63 @@ local function DrawYou(timeline)
     end
 end
 
---While a replay of the pull runs, a line shows how far it is
+--What comes next of yours from a point of the pull: the line on the chart while a replay runs, otherwise 5 seconds
+--before the selected cast. Your presses with the seconds until each, then the next reminder
+local function RefreshNextUp()
+    local timeline = page.timeline
+    if not timeline or not page.duration then
+        return
+    end
+    local point = page.now or (page.selected and math.max(0, page.selected.at - 5)) or 0
+    page.point = point
+    page.nextLabel:SetText("NEXT UP AT " .. ns:FormatTime(point))
+    local uses = {}
+    for _, use in ipairs(timeline.uses) do
+        if use.at >= point then
+            table.insert(uses, use)
+        end
+    end
+    table.sort(uses, function(a, b) return a.at < b.at end)
+    local r, g, b = ns:GetAccent()
+    local function Seconds(value)
+        return value < 10 and string.format("%.1f", value) or tostring(math.floor(value + 0.5))
+    end
+    for index, row in ipairs(page.nextRows) do
+        local use = uses[index]
+        row:SetShown(use ~= nil)
+        if use then
+            row.icon:SetTexture(kit.EntryIcon(use.entry))
+            row.label:SetText(use.entry .. (use.conflict and "  ·  not ready" or ""))
+            row.time:SetText(Seconds(use.at - point))
+            row:SetAlpha(use.conflict and 0.55 or 1)
+            row.bar:SetColorTexture(r, g, b, index == 1 and 1 or 0.45)
+            if index == 1 then
+                row.time:SetTextColor(r, g, b, 1)
+            else
+                row.time:SetTextColor(1, 1, 1, 0.9)
+            end
+        end
+    end
+    page.nextEmpty:SetShown(#uses == 0)
+    local reminder
+    for _, candidate in ipairs(timeline.reminders) do
+        if candidate.at >= point then
+            reminder = candidate
+            break
+        end
+    end
+    local row = page.nextReminder
+    row:SetShown(reminder ~= nil)
+    if reminder then
+        row.icon:SetTexture(reminder.icon or kit.QUESTION_MARK)
+        row.label:SetText((reminder.approximate and "~ " or "") .. reminder.text)
+        row.time:SetText(Seconds(reminder.at - point))
+        row.fill:SetColorTexture(r, g, b, 0.32)
+        row.bar:SetColorTexture(0, 0, 0, 0)
+    end
+end
+
+--While a replay of the pull runs, a line shows how far it is, with the time on the time bar
 local function UpdatePlayhead()
     if not page or not page.duration then
         return
@@ -570,16 +703,29 @@ local function UpdatePlayhead()
     local testing = ns:IsTesting() and not ns.fight.test.ability
     local now = testing and (GetTime() - ns.fight.start) or nil
     if now and now >= 0 and now <= page.duration and page.chart:IsShown() then
-        page.playhead:SetColorTexture(Accent())
-        page.playhead:ClearAllPoints()
-        page.playhead:SetPoint("TOPLEFT", page.chart, "TOPLEFT", X(now), -TICKS_H)
-        page.playhead:SetPoint("BOTTOMLEFT", page.chart, "BOTTOMLEFT", X(now), 1)
-        page.playhead:Show()
+        local r, g, b = ns:GetAccent()
+        local x = X(now)
+        page.playhead:SetColorTexture(r, g, b, 1)
+        page.glow:SetColorTexture(r, g, b, 0.22)
+        for _, line in ipairs({ page.playhead, page.glow }) do
+            line:ClearAllPoints()
+            line:SetPoint("TOP", page.chart, "TOPLEFT", x, -RULER_H)
+            line:SetPoint("BOTTOM", page.chart, "BOTTOMLEFT", x, 1)
+            line:Show()
+        end
+        page.bubble.fill:SetColorTexture(r, g, b, 1)
+        page.bubble.text:SetText(ns:FormatTime(now))
+        page.bubble:ClearAllPoints()
+        page.bubble:SetPoint("TOP", page.chart, "TOPLEFT", x, -5)
+        page.bubble:Show()
         page.now = now
     else
         page.playhead:Hide()
+        page.glow:Hide()
+        page.bubble:Hide()
         page.now = nil
     end
+    RefreshNextUp()
 end
 
 local function UpdateReplayButtons()
@@ -695,38 +841,6 @@ local function RefreshCast(cast, timeline, boss, planText, keepRows)
     end
 end
 
---Your reminders in the 30 seconds before the selected cast, and the ones for it
-local function RefreshReminders(cast, timeline)
-    local shown = {}
-    if cast then
-        for _, reminder in ipairs(timeline.reminders) do
-            if reminder.cast == cast or (reminder.at >= cast.at - 30 and reminder.at <= cast.at + 1) then
-                table.insert(shown, reminder)
-            end
-        end
-    end
-    local r, g, b = ns:GetAccent()
-    for index, row in ipairs(page.reminderRows) do
-        local reminder = shown[index]
-        row:SetShown(reminder ~= nil)
-        if reminder then
-            local conflict = reminder.use and reminder.use.conflict
-            row.icon:SetTexture(reminder.icon or kit.QUESTION_MARK)
-            row.label:SetText((reminder.approximate and "~ " or "") .. reminder.text)
-            row.time:SetText(ns:FormatTime(reminder.at))
-            if conflict then
-                row.bar:SetColorTexture(ErrorColor())
-                row.time:SetTextColor(ErrorColor())
-            else
-                row.bar:SetColorTexture(r, g, b, reminder.cast == cast and 1 or 0.45)
-                row.time:SetTextColor(r, g, b, reminder.cast == cast and 1 or 0.7)
-            end
-        end
-    end
-    page.remindersEmpty:SetShown(cast ~= nil and #shown == 0)
-    page.remindersEmpty:SetText("None in the 30 seconds before it.")
-end
-
 function Refresh(keepRows)
     if not page then
         return
@@ -764,7 +878,6 @@ function Refresh(keepRows)
     DrawLanes(lanes, selected)
     DrawYou(timeline)
     RefreshCast(selected, timeline, boss, planText, keepRows)
-    RefreshReminders(selected, timeline)
     UpdatePlayhead()
     UpdateReplayButtons()
 end

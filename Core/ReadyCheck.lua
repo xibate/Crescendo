@@ -52,10 +52,13 @@ function ns:CheckPlanForPull(specKey, diffSlug, encounterId)
     return result
 end
 
---The ready check lines for the boss the player is about to pull, nil outside the raids or as another spec
-function ns:ReadyCheckLines()
-    local boss, difficultyId = ns:CurrentBoss()
-    local specKey = ns:GetPlayerSpecKey()
+--The ready check lines for the boss the player is about to pull, nil outside the raids or as another spec. With a boss,
+--difficulty and spec, the lines for those
+function ns:ReadyCheckLines(boss, difficultyId, specKey)
+    if not boss then
+        boss, difficultyId = ns:CurrentBoss()
+    end
+    specKey = specKey or ns:GetPlayerSpecKey()
     local difficulty = boss and ns.difficulties[difficultyId]
     if not boss or not specKey or not difficulty then
         return nil

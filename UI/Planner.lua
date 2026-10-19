@@ -10,6 +10,7 @@ local LIST_W = 260
 local RIGHT_X = 274
 local TABS_H = 36
 local BOTTOM_H = 40
+local PREVIEW_W = 250
 local ROW_H = 26
 local QUESTION_MARK = 134400
 
@@ -1412,6 +1413,196 @@ local function BuildRight(page)
     ns:Tooltip(planner.planButton, "Plan text", "The whole plan of this boss as text, to edit, copy to another boss or restore from history.")
 end
 
+------------------------------------------------------------------------------------------------------------------------
+-- Right: how the reminders look, what comes first in the pull and the ready check line
+------------------------------------------------------------------------------------------------------------------------
+
+local function PreviewIcon(parent, size)
+    local icon = parent:CreateTexture(nil, "ARTWORK")
+    icon:SetSize(size, size)
+    icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    return icon
+end
+
+local function BuildPreviews(page)
+    local column = CreateFrame("Frame", nil, page)
+    column:SetWidth(PREVIEW_W)
+    planner.previews = column
+    local edge = column:CreateTexture(nil, "BORDER")
+    edge:SetWidth(1)
+    edge:SetPoint("TOPLEFT", -16, 0)
+    edge:SetPoint("BOTTOMLEFT", -16, 0)
+    edge:SetColorTexture(1, 1, 1, 0.06)
+
+    ns:SectionLabel(column, "Reminders · icon, bar, text"):SetPoint("TOPLEFT", 0, 0)
+    planner.styleInUse = ns:Text(column, 10, theme.dim, "RIGHT")
+    planner.styleInUse:SetPoint("TOPRIGHT", 0, 0)
+    --Icon: the icon with a countdown on it, the text next to it
+    local iconBox = CreateFrame("Frame", nil, column)
+    iconBox:SetPoint("TOPLEFT", 0, -18)
+    iconBox:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    iconBox:SetHeight(64)
+    ns:Fill(iconBox, { 0.08, 0.07, 0.06, 1 })
+    ns:Border(iconBox, theme.border)
+    planner.previewIcon = PreviewIcon(iconBox, 44)
+    planner.previewIcon:SetPoint("LEFT", 10, 0)
+    local iconFrame = CreateFrame("Frame", nil, iconBox)
+    iconFrame:SetAllPoints(planner.previewIcon)
+    planner.previewIconBorder = ns:Border(iconFrame)
+    planner.previewIconTime = iconFrame:CreateFontString(nil, "OVERLAY")
+    planner.previewIconTime:SetFont(ns:GetFont(), 17, "OUTLINE")
+    planner.previewIconTime:SetPoint("CENTER")
+    planner.previewIconTime:SetText("2.3")
+    planner.previewIconBar = iconFrame:CreateTexture(nil, "OVERLAY")
+    planner.previewIconBar:SetHeight(3)
+    planner.previewIconBar:SetPoint("BOTTOMLEFT")
+    planner.previewIconBar:SetWidth(26)
+    planner.previewIconText = ns:Text(iconBox, 13)
+    planner.previewIconText:SetPoint("LEFT", planner.previewIcon, "RIGHT", 10, 0)
+    planner.previewIconText:SetPoint("RIGHT", iconBox, "RIGHT", -8, 0)
+    planner.previewIconText:SetWordWrap(true)
+    --Bar: the icon, a bar that runs out, the text and the countdown
+    local bar = CreateFrame("Frame", nil, column)
+    bar:SetPoint("TOPLEFT", 0, -90)
+    bar:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    bar:SetHeight(28)
+    ns:Fill(bar, theme.window)
+    ns:Border(bar, { 0, 0, 0, 1 })
+    planner.previewBarIcon = PreviewIcon(bar, 28)
+    planner.previewBarIcon:SetPoint("LEFT")
+    planner.previewBarFill = bar:CreateTexture(nil, "ARTWORK")
+    planner.previewBarFill:SetPoint("TOPLEFT", planner.previewBarIcon, "TOPRIGHT", 0, 0)
+    planner.previewBarFill:SetPoint("BOTTOMLEFT", planner.previewBarIcon, "BOTTOMRIGHT", 0, 0)
+    planner.previewBarFill:SetWidth(120)
+    planner.previewBarTime = ns:Text(bar, 13, theme.text, "RIGHT")
+    planner.previewBarTime:SetPoint("RIGHT", -8, 0)
+    planner.previewBarTime:SetText("1.4")
+    planner.previewBarText = ns:Text(bar, 12)
+    planner.previewBarText:SetPoint("LEFT", planner.previewBarIcon, "RIGHT", 8, 0)
+    planner.previewBarText:SetPoint("RIGHT", planner.previewBarTime, "LEFT", -6, 0)
+    --Text: only the text, with the countdown after it
+    planner.previewText = ns:Text(column, 16)
+    planner.previewText:SetPoint("TOPLEFT", 0, -132)
+    planner.previewText:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+
+    --Next up: the first presses of the recorded pull, or of the plan's times
+    planner.nextUpLabel = ns:SectionLabel(column, "Next up")
+    planner.nextUpLabel:SetPoint("TOPLEFT", 0, -172)
+    planner.nextCards = {}
+    local cardWidth = (PREVIEW_W - 12) / 3
+    for index = 1, 3 do
+        local card = CreateFrame("Frame", nil, column)
+        card:SetSize(cardWidth, 84)
+        card:SetPoint("TOPLEFT", (index - 1) * (cardWidth + 6), -190)
+        ns:Fill(card, theme.window)
+        card.top = card:CreateTexture(nil, "ARTWORK")
+        card.top:SetHeight(2)
+        card.top:SetPoint("TOPLEFT")
+        card.top:SetPoint("TOPRIGHT")
+        card.icon = PreviewIcon(card, 26)
+        card.icon:SetPoint("TOP", 0, -10)
+        card.time = ns:Text(card, 15, theme.text, "CENTER")
+        card.time:SetPoint("TOP", card.icon, "BOTTOM", 0, -5)
+        card.name = ns:Text(card, 10, theme.dim, "CENTER")
+        card.name:SetPoint("TOPLEFT", 4, -62)
+        card.name:SetPoint("RIGHT", card, "RIGHT", -4, 0)
+        planner.nextCards[index] = card
+    end
+    planner.nextEmpty = ns:Text(column, 11, theme.dim)
+    planner.nextEmpty:SetPoint("TOPLEFT", 0, -192)
+    planner.nextEmpty:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    planner.nextEmpty:SetWordWrap(true)
+    planner.nextEmpty:SetText("Nothing in the plan yet.")
+
+    --The ready check line for this boss
+    ns:SectionLabel(column, "Ready check"):SetPoint("TOPLEFT", 0, -290)
+    local check = CreateFrame("Frame", nil, column)
+    check:SetPoint("TOPLEFT", 0, -308)
+    check:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    check:SetHeight(110)
+    ns:Fill(check, { 0, 0, 0, 0.35 })
+    ns:Border(check, theme.border)
+    planner.readyCheck = ns:Text(check, 11)
+    planner.readyCheck:SetPoint("TOPLEFT", 8, -8)
+    planner.readyCheck:SetPoint("BOTTOMRIGHT", -8, 8)
+    planner.readyCheck:SetWordWrap(true)
+    planner.readyCheck:SetJustifyV("TOP")
+    local note = ns:Text(column, 10, theme.dim)
+    note:SetPoint("BOTTOMLEFT", 0, 0)
+    note:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    note:SetWordWrap(true)
+    note:SetText("Style, size and how many Next up shows are set on the Display and General pages.")
+end
+
+--The first presses of the pull: when each use lands on the recorded pull, else the plan's times
+local function FirstPresses(planText)
+    local presses = {}
+    local timeline = planner.cardTimeline
+    if timeline then
+        for _, use in ipairs(timeline.uses) do
+            table.insert(presses, { entry = use.entry, at = use.at, conflict = use.conflict ~= nil })
+        end
+    else
+        for _, timing in ipairs(ns:ParsePlan(planText).times) do
+            if timing.phase == 'main' then
+                table.insert(presses, { entry = timing.entry, at = timing.seconds })
+            end
+        end
+    end
+    table.sort(presses, function(a, b) return a.at < b.at end)
+    return presses
+end
+
+local function RefreshPreviews(planText)
+    local specKey, diffSlug, boss = Selected()
+    local r, g, b = ns:GetAccent()
+    local style = ns.db.options.displayStyle or 'icon'
+    planner.styleInUse:SetText("in use: " .. Capitalized(style))
+    --The messages of the selected ability's first assignment, or of the first press of the plan
+    local presses = FirstPresses(planText)
+    local entry = planner.assignments and planner.assignments[1] and planner.assignments[1].entry
+    if not (entry and entry:find('%S')) then
+        entry = presses[1] and presses[1].entry
+    end
+    local steps = entry and ns:GetEntrySteps(specKey, entry) or {}
+    local first, last = steps[1], steps[#steps]
+    planner.previewIcon:SetTexture(first and first.icon or QUESTION_MARK)
+    planner.previewIconText:SetText(first and first.text or "Pick a ramp or spell to see it here")
+    planner.previewIconBorder(r, g, b, 1)
+    planner.previewIconBar:SetColorTexture(r, g, b, 1)
+    planner.previewBarIcon:SetTexture(last and last.icon or QUESTION_MARK)
+    planner.previewBarText:SetText(last and last.text or "Your press")
+    planner.previewBarFill:SetColorTexture(r, g, b, 0.32)
+    planner.previewText:SetText((last and last.text or "Your press") .. "  |cff" ..
+        string.format("%02x%02x%02x", r * 255, g * 255, b * 255) .. "0.8|r")
+    --Next up
+    for index, card in ipairs(planner.nextCards) do
+        local press = presses[index]
+        card:SetShown(press ~= nil)
+        if press then
+            card.icon:SetTexture(EntryIcon(press.entry))
+            card.time:SetText(ns:FormatTime(press.at))
+            card.name:SetText(press.entry)
+            card.top:SetColorTexture(r, g, b, index == 1 and 1 or 0.4)
+            if index == 1 then
+                card.time:SetTextColor(r, g, b, 1)
+            else
+                card.time:SetTextColor(1, 1, 1, 0.9)
+            end
+            card:SetAlpha(press.conflict and 0.55 or 1)
+            if press.conflict then
+                card.name:SetText(press.entry .. " · cd")
+            end
+        end
+    end
+    planner.nextEmpty:SetShown(#presses == 0)
+    planner.nextUpLabel:SetText(planner.cardTimeline and "NEXT UP · ON THE RECORDED PULL" or "NEXT UP")
+    --Ready check
+    local lines = ns:ReadyCheckLines(boss, UI().difficulty, specKey)
+    planner.readyCheck:SetText("|cff" .. string.format("%02x%02x%02x", r * 255, g * 255, b * 255) .. "Crescendo:|r " ..
+        table.concat(lines or { "No plan" }, "\n"))
+end
+
 --The casts of an ability in a recorded pull's timeline on which an assignment's spell won't be ready, like 'cast 3 (02:10)'
 function NotReadyCasts(assignment, ability, scope, timeline)
     if not timeline or not ability then
@@ -1510,7 +1701,10 @@ function Refresh(keepRows)
     planner.listWell:SetPoint("BOTTOMLEFT", 0, 0)
     planner.right:ClearAllPoints()
     planner.right:SetPoint("TOPLEFT", RIGHT_X, top)
-    planner.right:SetPoint("BOTTOMRIGHT", 0, 0)
+    planner.right:SetPoint("BOTTOMRIGHT", -PREVIEW_W - 32, 0)
+    planner.previews:ClearAllPoints()
+    planner.previews:SetPoint("TOPRIGHT", 0, top)
+    planner.previews:SetPoint("BOTTOMRIGHT", 0, 0)
 
     local lines = AbilityListLines(boss, ns:GetPlannerAbilities(boss, planText, UI().difficulty == 15), planText)
     local selected = SelectedLine(lines)
@@ -1527,6 +1721,7 @@ function Refresh(keepRows)
     planner.planTextTab:SetShown(tab == 'plan')
     planner.noteTab:SetShown(tab == 'note')
     RefreshAssignments(selected, keepRows)
+    RefreshPreviews(planText)
     if tab == 'plan' then
         planner.planUndo:SetShown(planner.copyUndo ~= nil)
         if not planner.planBox:HasFocus() then
@@ -1543,6 +1738,7 @@ ns:RegisterPage('plans', "Plans", 1, function(page)
     planner = { page = page }
     BuildList(page)
     BuildRight(page)
+    BuildPreviews(page)
     ns:SetPageTestHandler('plans', RefreshTest)
 end, function()
     Refresh()
@@ -1569,7 +1765,7 @@ ns.plannerKit = {
     Selected = Selected, GetPlanText = GetPlanText, SpellNameAndIcon = SpellNameAndIcon, AbilityKey = AbilityKey,
     StageName = StageName, ShortStageName = ShortStageName, HasStages = HasStages, IsIntermission = IsIntermission,
     NewCardList = NewCardList, FillCards = FillCards, ResetCards = ResetCards, OpenEntryMenu = OpenEntryMenu,
-    ConflictTooltip = ConflictTooltip, CastsText = CastsText, TimingText = TimingText, FindAbility = FindAbility,
+    ConflictTooltip = ConflictTooltip, CastsText = CastsText, EntryIcon = EntryIcon, TimingText = TimingText, FindAbility = FindAbility,
     SelectAbility = SelectAbility, CARD_H = CARD_H, QUESTION_MARK = QUESTION_MARK
 }
 
