@@ -22,3 +22,14 @@ function ns:GetPlayerHaste()
     ns.lastKnownHaste = haste
     return haste
 end
+
+--True when the player has a spell, a talent included
+function ns:IsSpellKnown(spellId)
+    if IsPlayerSpell and IsPlayerSpell(spellId) then
+        return true
+    end
+    if C_SpellBook and C_SpellBook.IsSpellKnown then
+        return C_SpellBook.IsSpellKnown(spellId, Enum.SpellBookSpellBank.Player) == true
+    end
+    return false
+end

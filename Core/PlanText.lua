@@ -141,7 +141,7 @@ function ns:ParsePlan(text)
         elseif kind == 'ability' then
             for _, entry in ipairs(parsed.entries) do
                 table.insert(plan.abilities, { name = parsed.name, spellId = parsed.spellId, counts = parsed.counts, every = parsed.every,
-                    from = parsed.from, phases = parsed.phases, shift = parsed.shift, entry = entry })
+                    from = parsed.from, phases = parsed.phases, phaseList = parsed.phaseList, shift = parsed.shift, entry = entry })
             end
         end
     end

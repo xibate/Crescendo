@@ -166,8 +166,12 @@ end
 --Shows a reminder that is due, unless it is left out because its spell or trinket is on cooldown
 function ns:Remind(reminder, timeLeft)
     reminder.shown = true
-    if not ns:IsOnCooldownForReminder(reminder, timeLeft) then
+    local skipped = ns:IsOnCooldownForReminder(reminder, timeLeft)
+    if not skipped then
         ns:ShowReminder(reminder)
+    end
+    if ns.fight.log then
+        table.insert(ns.fight.log, { at = GetTime() - ns.fight.start, entry = reminder.entry, text = reminder.text, press = reminder.press, skipped = skipped })
     end
 end
 

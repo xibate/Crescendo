@@ -29,8 +29,11 @@ encounter:SetScript("OnEvent", function(_, event, ...)
     if event == "ENCOUNTER_START" then
         OnEncounterStart(...)
     elseif ns.fight.running and not ns.fight.test then
+        local encounterId, _, difficultyId, _, success = ...
+        local review = ns:BuildPullReview(encounterId, ns.difficultyAliases[difficultyId] or difficultyId, success == 1)
         ns:StopRecording()
         ns:StopFight()
+        ns:ShowPullReview(review)
     end
 end)
 

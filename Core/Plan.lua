@@ -11,9 +11,14 @@ function ns:ShouldUseStep(step)
     return not ns.db.options.preReqsOnly or step.prerequisite
 end
 
-function ns:CreateReminder(step, at)
+--A reminder of a step: entry is the ramp or spell it is for, press is true for the step at the ramp's or spell's time,
+--and countFrom is where a spoken countdown to the press starts (see ns:CountdownStart)
+function ns:CreateReminder(step, at, entry, countFrom)
     return {
         at = at,
+        entry = entry,
+        press = (step.offset or 0) == 0 and not step.chargesOf,
+        countFrom = countFrom,
         text = step.text,
         icon = step.icon,
         tts = step.tts,
@@ -63,6 +68,12 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
         return ns.steps[entry]
     end
 
+    local countFrom = {}
+    local function CountFrom(entry)
+        countFrom[entry] = countFrom[entry] or ns:CountdownStart(StepsFor(entry) or {})
+        return countFrom[entry]
+    end
+
     local plan = ns:ParsePlan(planText)
     local noteText = readNotes and ReadMrtNotes(specKey)
     local times = noteText and ns:ParsePlan(noteText).times or plan.times
@@ -71,7 +82,7 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
             local at = math.floor(timing.seconds - step.offset + 0.5)
             if at >= 0 and ns:ShouldUseStep(step) then
                 ns.plan[timing.phase] = ns.plan[timing.phase] or {}
-                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at))
+                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at, timing.entry, CountFrom(timing.entry)))
             end
         end
     end
@@ -88,6 +99,7 @@ end
 
 --Replaces the times of a boss plan with the player's lines of an MRT note. Boss ability lines and comments are kept
 function ns:ImportNoteIntoPlan(specKey, diffSlug, encounterId, noteText)
+    ns:BackupPlan(specKey, diffSlug, encounterId, "Before taking times from a note")
     local parts = {}
     for _, text in ipairs({ ns:NoteToPlan(noteText, specKey), ns:KeepAbilityLines(ns:GetPlan(specKey, diffSlug, encounterId)) }) do
         if text ~= '' then

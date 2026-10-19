@@ -128,14 +128,18 @@ local function ScheduleAbilityTiming(barId, anchors, landsAt)
         anchors = anchors,
         landsAt = landsAt,
         shown = previous and previous.shown or {},
+        counted = previous and previous.counted or {},
         reminders = {}
     }
     for anchorIndex, anchor in ipairs(anchors) do
-        for stepIndex, step in ipairs(ns.steps[anchor.entry] or {}) do
+        local steps = ns.steps[anchor.entry] or {}
+        local countFrom = ns:CountdownStart(steps)
+        for stepIndex, step in ipairs(steps) do
             if ns:ShouldUseStep(step) then
-                local reminder = ns:CreateReminder(step, landsAt + anchor.shift - step.offset)
+                local reminder = ns:CreateReminder(step, landsAt + anchor.shift - step.offset, anchor.entry, countFrom)
                 reminder.key = anchorIndex .. '-' .. stepIndex
                 reminder.shown = timing.shown[reminder.key] or false
+                reminder.counted = timing.counted[reminder.key]
                 table.insert(timing.reminders, reminder)
             end
         end
@@ -167,6 +171,9 @@ function ns:OnBossModBar(source, barKey, text, duration, spellId, count)
         return
     end
     local matches = MatchingAnchors(name, spellId, tonumber(count) or barCount)
+    for _, anchor in ipairs(matches) do
+        anchor.fired = true
+    end
     if #matches > 0 then
         barSource = source
         ScheduleAbilityTiming(source .. ':' .. tostring(barKey), matches, GetTime() + tonumber(duration))
@@ -214,12 +221,28 @@ end
 function ns:ShowDueAbilityReminders(now)
     for _, timing in pairs(abilityTimings) do
         for _, reminder in ipairs(timing.reminders) do
+            if not reminder.shown and ns:CountDown(reminder, reminder.at - now) then
+                timing.counted[reminder.key] = true
+            end
             if not reminder.shown and ns:IsDue(reminder, reminder.at - now) then
                 timing.shown[reminder.key] = true
                 ns:Remind(reminder, reminder.at - now)
             end
         end
     end
+end
+
+--The reminders tied to boss abilities that haven't shown, with how long until each: { reminder, timeLeft }
+function ns:UpcomingAbilityReminders(now)
+    local upcoming = {}
+    for _, timing in pairs(abilityTimings) do
+        for _, reminder in ipairs(timing.reminders) do
+            if not reminder.shown then
+                table.insert(upcoming, { reminder = reminder, timeLeft = reminder.at - now })
+            end
+        end
+    end
+    return upcoming
 end
 
 local bossModHooks = CreateFrame("Frame")

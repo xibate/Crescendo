@@ -10,7 +10,7 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
 
 ## The window
 
-`/cres` (or `/crescendo`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. It has three pages: Plans, Ramps and Display. `/cres ramps` and `/cres display` open a page directly, `/cres stop` stops a test.
+`/cres` (or `/crescendo`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its accent colour and font when it is installed. It has four pages: Plans, Ramps, Display and General. `/cres ramps`, `/cres display` and `/cres general` open a page directly, `/cres review` shows the last pull's review, `/cres stop` stops a test. In a raid, the window opens on the boss you target, or else the next boss that isn't dead this lockout, on that difficulty and for your spec.
 
 ### Plans
 
@@ -26,11 +26,20 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
 
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
 
-Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage). The Plan text tab shows and edits the whole plan, including times after the pull and stages. Its **Copy to...** copies the plan to the other difficulty of the boss or to another boss of the raid; a plan that was there is replaced, and **Undo** brings it back.
+Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5 #2,4 -3 - Power Word: Barrier`, where `p2.5` is the stage). The Plan text tab shows and edits the whole plan, including times after the pull and stages. Its **Copy to...** copies the plan to the other difficulty of the boss or to another boss of the raid; a plan that was there is replaced, and **Undo** brings it back. **History** keeps the last ten versions of each plan, saved before an import, a copy over it, taking times from a note, saving the plan text and editing assignments (one every ten minutes); pick one to put it back.
 
 ### Sharing
 
 The Share tab has two modes. **Crescendo string** exports the selected plan, or every plan of the raid on Heroic and Mythic, as text to paste to another Crescendo user, with the ramps the plans use. Pasting a string shows what importing it does; **Import** (click twice) replaces the plans for those bosses and adds the ramps you don't have, keeping your own ramps with the same name. **MRT note** takes your times from an MRT note, or copies the plan out as note lines.
+
+### General
+
+- **Open on the boss I'm at**: in a raid the planner opens on the boss you're about to pull.
+- **Check my plan at a ready check**: a line in chat with your plan for the boss you're about to pull, and what is wrong with it: no plan, names that aren't a ramp, spell or equipped trinket, spells you don't have talented, trinkets without a use effect, and uses that won't be ready in time on the recorded pull.
+- **Review each pull**: after a pull, a window lists what was left out because it was on cooldown and what never triggered, with why (a stage that didn't come, no boss mod bar for it, none of its casts came). When everything showed, a line in chat says so.
+- **Show what's next**: a strip with your next presses and how long until each, moved with Unlock like the reminders.
+- **Count down the last seconds before a press**: says 3, 2, 1 before a press, starting lower when a step is spoken at the same time (like a spell's Soon).
+- **Save plans** for all characters or for this character only (it starts with a copy of the plans for all characters).
 
 ### Testing
 
@@ -38,7 +47,7 @@ Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bar
 
 ### Ramps and Display
 
-The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show, and whether plans are saved for all characters or for this character only (it starts with a copy of the plans for all characters). **Unlock** (or `/cres unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, a sound for every reminder or only the press (from the game's sounds, or sounds other addons share through LibSharedMedia), the reminder options and reading MRT notes.
+The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show, and their style: **Icon** (the icon with the text below), **Bar** (a bar with the icon, text and countdown that runs out while it shows) or **Text** (only the text). **Unlock** (or `/cres unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, a sound for every reminder or only the press (from the game's sounds, or sounds other addons share through LibSharedMedia), the reminder options and reading MRT notes.
 
 **Hide reminders while the spell or trinket is on cooldown** leaves out the reminders of a ramp, spell or trinket that won't be ready by the time it should land. A ramp goes by the spell set for it on the Ramps page. During boss fights the game can hide cooldowns from addons; then the addon goes by your last cast of the spell and the cooldown it saw when it could read it, and when it can't tell, the reminder shows.
 
@@ -105,7 +114,7 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 | Folder | Contents |
 | --- | --- |
 | [Config](Config/) | `Bosses.lua` raids, bosses and difficulties (generated from BigWigs), `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities and stages, from BigWigs |
-| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `Cooldowns.lua` whether a spell or trinket is ready, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Timeline.lua` what happens in a recorded pull, `Share.lua` plan strings, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
-| [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/cres`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages, `Unlock.lua` moving the reminders |
+| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `Cooldowns.lua` whether a spell or trinket is ready, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Timeline.lua` what happens in a recorded pull, `Share.lua` plan strings, `Location.lua` the raid and boss the player is at, `ReadyCheck.lua` the ready check summary, `Review.lua` the pull review, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
+| [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/cres`, `Planner.lua` the Plans page, `RampsPage.lua`, `DisplayPage.lua` and `GeneralPage.lua` the other pages, `NextUp.lua` the Next up strip, `Review.lua` the review window, `Unlock.lua` moving the reminders and the strip |
 | `main.lua` | Starts and stops the fight on encounter events |
 | [tools](tools/) | `gen_bosses.py` regenerates `Config/Bosses.lua` and `Config/Abilities.lua` from a BigWigs checkout, not part of the addon |

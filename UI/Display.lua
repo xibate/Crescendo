@@ -1,9 +1,12 @@
 local _, ns = ...
 
---Reminder displays, in the style of the addon's window: the spell icon in a thin border, the text on a dark strip below
---it, and a countdown on the icon with a bar that runs out while the reminder shows. Reminders with a countdown get an
---accent coloured border. Extra displays are added next to the first one, in the grow direction, when several reminders
---show at once
+--Reminder displays, in the style of the addon's window, in one of three styles:
+--  icon  the spell icon in a thin border, the text on a dark strip below it, a countdown on the icon and a thin bar along
+--        its bottom that runs out while the reminder shows. Reminders with a countdown get an accent coloured border
+--  bar   a bar with the icon on its left, the text in it and the countdown on its right, filled with the accent colour
+--        that runs out while the reminder shows
+--  text  only the text, large, with the countdown next to it
+--Extra displays are added next to the first one, in the grow direction, when several reminders show at once
 ns.frames = {}
 
 local SHOW_SECONDS = 3
@@ -30,14 +33,58 @@ local function PlaceFrame(index)
     end
 end
 
+local function Style()
+    local style = ns.db.options.displayStyle
+    return (style == 'bar' or style == 'text') and style or 'icon'
+end
+
+--Lays a display out for the style. In the bar style the text sits on the bar, so it belongs to the bar's frame and is
+--sized by its font instead of scaled
 local function StyleFrame(frame)
     local options = ns.db.options
     local font = ns:GetFont()
-    frame.box:SetSize(options.iconSizeW + 2, options.iconSizeH + 2)
-    frame.text:SetFont(font, 12, "OUTLINE")
-    frame.text:SetScale(options.textSize)
-    frame.timer:SetFont(font, 14, "OUTLINE")
-    frame.timer:SetScale(options.timerSize)
+    local style = Style()
+    frame.style = style
+    frame.icon:ClearAllPoints()
+    frame.bar:ClearAllPoints()
+    frame.text:ClearAllPoints()
+    frame.timer:ClearAllPoints()
+    if style == 'bar' then
+        local height = math.max(20, math.floor(options.iconSizeH * 0.6 + 0.5))
+        frame.box:SetSize(options.barWidth, height)
+        frame.icon:SetPoint("TOPLEFT", 1, -1)
+        frame.icon:SetSize(height - 2, height - 2)
+        frame.bar:SetPoint("TOPLEFT", frame.icon, "TOPRIGHT", 0, 0)
+        frame.bar:SetPoint("BOTTOMLEFT", frame.icon, "BOTTOMRIGHT", 0, 0)
+        frame.text:SetParent(frame.box)
+        frame.text:SetScale(1)
+        frame.text:SetFont(font, math.floor(7 * options.textSize + 0.5), "OUTLINE")
+        frame.text:SetPoint("LEFT", frame.icon, "RIGHT", 8, 0)
+        frame.text:SetPoint("RIGHT", frame.box, "RIGHT", -44, 0)
+        frame.text:SetJustifyH("LEFT")
+        frame.timer:SetScale(1)
+        frame.timer:SetFont(font, math.floor(7 * options.timerSize + 0.5), "OUTLINE")
+        frame.timer:SetPoint("RIGHT", frame.box, "RIGHT", -8, 0)
+    else
+        frame.box:SetSize(options.iconSizeW + 2, options.iconSizeH + 2)
+        frame.icon:SetPoint("TOPLEFT", 1, -1)
+        frame.icon:SetPoint("BOTTOMRIGHT", -1, 1)
+        frame.bar:SetHeight(BAR_HEIGHT)
+        frame.bar:SetPoint("BOTTOMLEFT", 1, 1)
+        frame.text:SetParent(frame)
+        frame.text:SetFont(font, 12, "OUTLINE")
+        frame.text:SetScale(options.textSize)
+        frame.text:SetJustifyH("CENTER")
+        frame.timer:SetFont(font, 14, "OUTLINE")
+        frame.timer:SetScale(options.timerSize)
+        if style == 'text' then
+            frame.text:SetPoint("CENTER", frame, "CENTER", 0, 0)
+            frame.timer:SetPoint("LEFT", frame.text, "RIGHT", 6, 0)
+        else
+            frame.text:SetPoint("TOP", frame.box, "BOTTOM", 0, -6)
+            frame.timer:SetPoint("CENTER", frame.icon, "CENTER")
+        end
+    end
 end
 
 --Colours the border: the accent colour for a countdown, otherwise near black
@@ -64,17 +111,13 @@ local function CreateDisplayFrame(index)
     frame.icon:SetPoint("TOPLEFT", 1, -1)
     frame.icon:SetPoint("BOTTOMRIGHT", -1, 1)
     frame.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    frame.bar = frame.box:CreateTexture(nil, "OVERLAY")
-    frame.bar:SetHeight(BAR_HEIGHT)
-    frame.bar:SetPoint("BOTTOMLEFT", 1, 1)
+    frame.bar = frame.box:CreateTexture(nil, "ARTWORK", nil, 1)
     frame.timer = frame.box:CreateFontString(nil, "OVERLAY")
-    frame.timer:SetPoint("CENTER", frame.icon, "CENTER")
     frame.timer:SetShadowColor(0, 0, 0, 1)
     frame.timer:SetShadowOffset(1, -1)
 
     --The text on a dark strip below the icon
     frame.text = frame:CreateFontString(nil, "OVERLAY")
-    frame.text:SetPoint("TOP", frame.box, "BOTTOM", 0, -6)
     frame.text:SetShadowColor(0, 0, 0, 1)
     frame.text:SetShadowOffset(1, -1)
     frame.textBackground = frame:CreateTexture(nil, "BACKGROUND")
@@ -107,12 +150,18 @@ local function FillFrame(frame, text, icon, countdown, showSeconds, timerText)
     frame.busy = true
     frame.text:SetText(text)
     frame.icon:SetTexture(icon)
-    frame.box:Show()
-    frame.textBackground:SetShown(text ~= nil and text ~= "")
+    local style = frame.style
+    frame.box:SetShown(style ~= 'text')
+    frame.textBackground:SetShown(style ~= 'bar' and text ~= nil and text ~= "")
     SetHighlight(frame, countdown)
     local r, g, b = ns:GetAccent()
-    frame.bar:SetColorTexture(r, g, b, 0.9)
-    local barWidth = math.max(1, (frame.box:GetWidth() or 2) - 2)
+    frame.bar:SetColorTexture(r, g, b, style == 'bar' and 0.35 or 0.9)
+    local barWidth
+    if style == 'bar' then
+        barWidth = math.max(1, (frame.box:GetWidth() or 2) - (frame.icon:GetWidth() or 0) - 2)
+    else
+        barWidth = math.max(1, (frame.box:GetWidth() or 2) - 2)
+    end
     frame.bar:SetWidth(barWidth)
     frame.timer:SetText(timerText or "")
     if not showSeconds then
@@ -167,6 +216,7 @@ function ns:ResetDisplay()
         StyleFrame(frame)
         PlaceFrame(index)
     end
+    ns:ResetNextUp()
     if ns.db.options.toggleDisplay then
         ns:ShowPreview()
     end
@@ -191,7 +241,7 @@ function ns:ShowPreview()
         local frame = ns.frames[index] or CreateDisplayFrame(index)
         local info = C_Spell.GetSpellInfo(example.spell)
         FillFrame(frame, example.text, info and info.iconID or 134400, example.countdown, nil, example.timer)
-        frame.bar:SetWidth(math.max(1, (frame.box:GetWidth() or 2) - 2) * 0.6)
+        frame.bar:SetWidth(math.max(1, (frame.bar:GetWidth() or 1) * 0.6))
     end
 end
 
@@ -199,6 +249,7 @@ end
 function ns:ToggleDisplay()
     local showing = not ns.db.options.toggleDisplay
     ns.db.options.toggleDisplay = showing
+    ns:RefreshNextUp()
     if showing then
         ns:ShowPreview()
     else

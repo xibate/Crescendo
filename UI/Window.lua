@@ -159,6 +159,9 @@ function ns:OpenWindow(key)
         CreateWindow()
     end
     local frame = window.frame
+    if not frame:IsShown() then
+        ns:SelectCurrentBoss()
+    end
     local point = UI().windowPoint
     frame:ClearAllPoints()
     if point then
@@ -169,6 +172,29 @@ function ns:OpenWindow(key)
     frame:Show()
     ns:ShowPage(key or UI().page)
     ns:RefreshTestStatus()
+end
+
+--In a raid, the planner opens on the boss the player is about to pull, on that difficulty and for their own spec
+function ns:SelectCurrentBoss()
+    if not ns.db.options.followRaid then
+        return
+    end
+    local boss, difficultyId = ns:CurrentBoss()
+    if not boss then
+        return
+    end
+    local ui = UI()
+    if ui.boss ~= boss then
+        ui.boss, ui.ability, ui.abilityScope = boss, nil, nil
+    end
+    if ns.difficulties[difficultyId] then
+        ui.difficulty = difficultyId
+    end
+    ui.spec = ns:GetPlayerSpecKey() or ui.spec
+    --Unfold the boss's raid
+    if ui.foldedRaids then
+        ui.foldedRaids[ns.bosses[boss].raid] = false
+    end
 end
 
 function ns:ToggleWindow(key)
@@ -216,8 +242,8 @@ function Crescendo_OnAddonCompartmentClick()
     ns:ToggleWindow()
 end
 
---/cres opens the window, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres phase 2 starts stage 2
---without a boss mod and /cres stop stops a test
+--/cres opens the window, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres review shows the
+--last pull's review, /cres phase 2 starts stage 2 without a boss mod and /cres stop stops a test
 function ns:SetUpCommands()
     AddSettingsEntry()
     SLASH_CRESCENDO1 = "/cres"
@@ -229,6 +255,8 @@ function ns:SetUpCommands()
             ns:StartPhaseManually(phase)
         elseif command == 'stop' then
             ns:StopTest()
+        elseif command == 'review' then
+            ns:OpenPullReview()
         elseif command == 'unlock' or command == 'lock' then
             ns:SetUnlocked(command == 'unlock' and not ns:IsUnlocked())
         elseif PageInfo(command) then

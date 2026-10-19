@@ -44,7 +44,8 @@ def lua_string(text):
 
 def parse_module(path):
     text = open(path, encoding="utf-8").read()
-    boss = re.search(r'BigWigs:NewBoss\("([^"]+)",\s*-?\d+,\s*(\d+)\)', text)
+    boss = re.search(r'BigWigs:NewBoss\("([^"]+)",\s*(-?\d+),\s*(\d+)\)', text)
+    npcs = [int(n) for line in re.findall(r"mod:RegisterEnableMob\(([^)]*)\)", text) for n in re.findall(r"\d+", line)]
     encounter = re.search(r"mod:SetEncounterID\((\d+)\)", text)
     if not boss or not encounter:
         return None
@@ -78,7 +79,8 @@ def parse_module(path):
                 stages.append((new_stage, label))
             group = label
             group_mythic = mythic_only(label)
-    return {"name": boss.group(1), "journal": int(boss.group(2)), "encounter": int(encounter.group(1)),
+    return {"name": boss.group(1), "instance": int(boss.group(2)), "journal": int(boss.group(3)), "npcs": npcs,
+            "encounter": int(encounter.group(1)),
             "entries": entries, "stages": stages}
 
 
@@ -97,19 +99,21 @@ head = open(os.path.join(config, "Bosses.lua"), encoding="utf-8").read()
 difficulties = head[head.index("ns.difficulties"):]
 out = ["local _, ns = ...", "",
        "--Raids and their bosses in journal order, by encounter id as BigWigs uses them. Generated from BigWigs' boss modules.",
-       "--Pulling a raid boss that isn't listed prints its encounter id in chat. collapsed: the raid starts folded in the planner",
+       "--Pulling a raid boss that isn't listed prints its encounter id in chat. collapsed: the raid starts folded in the planner.",
+       "--instanceId is the raid's instance, journalId the boss's encounter journal id and npcs the creatures that are the boss",
        "ns.raids = {"]
 for raid_name, collapsed, bosses in raids:
-    out.append(f"    {{ name = {lua_string(raid_name)}{', collapsed = true' if collapsed else ''}, bosses = {{")
+    out.append(f"    {{ name = {lua_string(raid_name)}, instanceId = {bosses[0]['instance']}{', collapsed = true' if collapsed else ''}, bosses = {{")
     for b in bosses:
-        out.append(f"        {{ encounterId = {b['encounter']}, name = {lua_string(b['name'])} }},")
+        npcs = ", ".join(str(n) for n in b["npcs"])
+        out.append(f"        {{ encounterId = {b['encounter']}, name = {lua_string(b['name'])}, journalId = {b['journal']}, npcs = {{ {npcs} }} }},")
     out[-1] = out[-1].rstrip(",")
     out.append("    } },")
 out[-1] = out[-1].rstrip(",")
-out += ["}", "", "--Bosses by encounter id: { name, raid = the raid's name, order = its place in the raid list }", "ns.bosses = {}",
+out += ["}", "", "--Bosses by encounter id: { name, raid = the raid's name, order = its place in the raid list, journalId, npcs }", "ns.bosses = {}",
         "for _, raid in ipairs(ns.raids) do",
         "    for order, boss in ipairs(raid.bosses) do",
-        "        ns.bosses[boss.encounterId] = { name = boss.name, raid = raid.name, order = order }",
+        "        ns.bosses[boss.encounterId] = { name = boss.name, raid = raid.name, order = order, journalId = boss.journalId, npcs = boss.npcs }",
         "    end",
         "end", "", difficulties.rstrip() + "\n"]
 open(os.path.join(config, "Bosses.lua"), "w", encoding="utf-8").write("\n".join(out))

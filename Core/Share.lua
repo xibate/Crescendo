@@ -184,6 +184,7 @@ end
 --Imports a read share string: its plans replace the plans for those bosses, and ramps the player doesn't have are added
 function ns:ImportPlans(data)
     for _, plan in ipairs(data.plans) do
+        ns:BackupPlan(data.specKey, plan.diffSlug, plan.encounterId, "Before an import")
         ns:SetPlan(data.specKey, plan.diffSlug, plan.encounterId, plan.text)
     end
     for _, ramp in ipairs(data.ramps) do

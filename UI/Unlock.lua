@@ -1,14 +1,16 @@
 local _, ns = ...
 
---Unlock mode, like EllesmereUI's: the screen dims under a grid, the reminders show as a preview with a box over them
---that can be dragged, and a small toolbar sets the exact position, snaps to the grid and locks them again. Escape and
---entering combat lock them too
+--Unlock mode, like EllesmereUI's: the screen dims under a grid, the reminders and the Next up strip show as a preview
+--with a box over each that can be dragged, and a small toolbar sets the exact position of the one picked last, snaps to
+--the grid and locks them again. Escape and entering combat lock them too
 
 local theme = ns.theme
 local GRID = 32
 local SNAP = 8
 
-local overlay, mover, toolbar
+local overlay, toolbar
+local movers = {}
+local selected = 'reminders'
 local unlocked = false
 local previewWasOn = false
 local windowWasOpen = false
@@ -21,15 +23,48 @@ local function Round(value, step)
     return math.floor(value / step + 0.5) * step
 end
 
---Moves the reminders to a position, in pixels from the middle of the screen, snapped to the grid when that is on
-function ns:SetDisplayPosition(x, y)
+--What can be moved: the options its position is kept in, its size, and what puts it there
+local MOVABLE = {
+    {
+        key = 'reminders', label = "Ramp reminders", x = 'framePositionX', y = 'framePositionY',
+        size = function() return Options().iconSizeW + 2, Options().iconSizeH + 2 end,
+        apply = function() ns:ResetDisplay() end
+    },
+    {
+        key = 'nextUp', label = "Next up", x = 'nextUpX', y = 'nextUpY',
+        size = function() return ns:NextUpSize() end,
+        apply = function() ns:ResetNextUp() end,
+        shown = function() return Options().nextUp end
+    }
+}
+
+local function Movable(key)
+    for _, movable in ipairs(MOVABLE) do
+        if movable.key == key then
+            return movable
+        end
+    end
+end
+
+--Moves something to a position, in pixels from the middle of the screen, snapped to the grid when that is on
+function ns:SetMoverPosition(key, x, y)
+    local movable = Movable(key)
     local step = Options().snapToGrid and SNAP or 1
-    Options().framePositionX = Round(x, step)
-    Options().framePositionY = Round(y, step)
-    ns:ResetDisplay()
+    Options()[movable.x] = Round(x, step)
+    Options()[movable.y] = Round(y, step)
+    movable.apply()
     if unlocked then
         ns:RefreshUnlock()
     end
+end
+
+function ns:SetDisplayPosition(x, y)
+    ns:SetMoverPosition('reminders', x, y)
+end
+
+local function SelectedPosition()
+    local movable = Movable(selected)
+    return Options()[movable.x], Options()[movable.y]
 end
 
 local function DrawGrid(frame)
@@ -62,9 +97,9 @@ local function DrawGrid(frame)
     Line(false, 0, 0.5, 1):SetColorTexture(r, g, b, 0.5)
 end
 
---The box over the first reminder, dragged to move them all
-local function CreateMover()
-    mover = CreateFrame("Button", "CrescendoMover", UIParent)
+--A box over something that can be moved, dragged to move it. Clicking or dragging it picks it for the toolbar
+local function CreateMover(movable)
+    local mover = CreateFrame("Button", "CrescendoMover" .. (movable.key == 'reminders' and "" or movable.key), UIParent)
     mover:SetFrameStrata("TOOLTIP")
     mover:SetFrameLevel(100)
     mover:SetMovable(true)
@@ -75,28 +110,36 @@ local function CreateMover()
     mover.setBorder = ns:Border(mover, theme.borderStrong)
     mover.label = ns:Text(mover, 11, theme.text, "CENTER")
     mover.label:SetPoint("BOTTOM", mover, "TOP", 0, 6)
-    mover.label:SetText("Ramp reminders")
+    mover.label:SetText(movable.label)
+    mover.key = movable.key
     local function Paint(active)
         local r, g, b = ns:GetAccent()
-        mover.fill:SetColorTexture(r, g, b, active and 0.35 or 0.18)
-        mover.setBorder(r, g, b, active and 1 or 0.8)
+        local picked = selected == movable.key
+        mover.fill:SetColorTexture(r, g, b, (active and 0.35) or (picked and 0.24) or 0.12)
+        mover.setBorder(r, g, b, (active or picked) and 1 or 0.55)
     end
     mover.Paint = Paint
     mover:SetScript("OnEnter", function() Paint(true) end)
     mover:SetScript("OnLeave", function() if not mover.dragging then Paint(false) end end)
-    --While dragging, the reminders follow the box
+    local function Pick()
+        selected = movable.key
+        ns:RefreshUnlock()
+    end
+    mover:SetScript("OnClick", Pick)
+    --While dragging, the frame follows the box
     local function Follow()
         local x, y = mover:GetCenter()
         local parentX, parentY = UIParent:GetCenter()
         if x and parentX then
-            Options().framePositionX = Round(x - parentX, 1)
-            Options().framePositionY = Round(y - parentY, 1)
-            ns:ResetDisplay()
-            toolbar.x:SetValue(tostring(Options().framePositionX))
-            toolbar.y:SetValue(tostring(Options().framePositionY))
+            Options()[movable.x] = Round(x - parentX, 1)
+            Options()[movable.y] = Round(y - parentY, 1)
+            movable.apply()
+            toolbar.x:SetValue(tostring(Options()[movable.x]))
+            toolbar.y:SetValue(tostring(Options()[movable.y]))
         end
     end
     mover:SetScript("OnDragStart", function(self)
+        selected = movable.key
         self.dragging = true
         self:StartMoving()
         self:SetScript("OnUpdate", Follow)
@@ -106,22 +149,24 @@ local function CreateMover()
         self:SetScript("OnUpdate", nil)
         self.dragging = false
         Follow()
-        ns:SetDisplayPosition(Options().framePositionX, Options().framePositionY)
+        ns:SetMoverPosition(movable.key, Options()[movable.x], Options()[movable.y])
         Paint(false)
     end)
-    ns:Tooltip(mover, "Ramp reminders", "Drag to move the reminders. Use the toolbar for the exact position.")
+    ns:Tooltip(mover, movable.label, "Drag to move it. Click it to set its exact position in the toolbar.")
+    movers[movable.key] = mover
 end
 
 local function Nudge(dx, dy)
     return function()
         local step = Options().snapToGrid and SNAP or 1
-        ns:SetDisplayPosition(Options().framePositionX + dx * step, Options().framePositionY + dy * step)
+        local x, y = SelectedPosition()
+        ns:SetMoverPosition(selected, x + dx * step, y + dy * step)
     end
 end
 
 local function CreateToolbar()
     toolbar = CreateFrame("Frame", "CrescendoUnlockBar", UIParent)
-    toolbar:SetSize(640, 40)
+    toolbar:SetSize(760, 40)
     toolbar:SetPoint("TOP", 0, -120)
     toolbar:SetFrameStrata("TOOLTIP")
     toolbar:SetFrameLevel(110)
@@ -143,6 +188,9 @@ local function CreateToolbar()
     title:SetPoint("LEFT", 12, 0)
     title:SetText("Unlocked")
     title:SetTextColor(ns:GetAccent())
+    toolbar.picked = ns:Text(toolbar, 11, theme.text)
+    toolbar.picked:SetPoint("LEFT", title, "RIGHT", 8, 0)
+    toolbar.picked:SetWidth(110)
 
     local function Coordinate(label, anchor, key)
         local text = ns:Text(toolbar, 11, theme.dim)
@@ -151,13 +199,13 @@ local function CreateToolbar()
         local box = ns:EditBox(toolbar, 52, 22, function(value)
             local number = tonumber(value)
             if number then
-                local x, y = Options().framePositionX, Options().framePositionY
+                local x, y = SelectedPosition()
                 if key == 'x' then
                     x = number
                 else
                     y = number
                 end
-                ns:SetDisplayPosition(x, y)
+                ns:SetMoverPosition(selected, x, y)
             else
                 ns:RefreshUnlock()
             end
@@ -165,7 +213,7 @@ local function CreateToolbar()
         box:SetPoint("LEFT", text, "RIGHT", 6, 0)
         return box
     end
-    toolbar.x = Coordinate("X", title, 'x')
+    toolbar.x = Coordinate("X", toolbar.picked, 'x')
     toolbar.y = Coordinate("Y", toolbar.x, 'y')
 
     local previous = toolbar.y
@@ -181,7 +229,9 @@ local function CreateToolbar()
     toolbar.snap = ns:Checkbox(toolbar, "Snap to grid", function() return Options().snapToGrid end, function(value)
         Options().snapToGrid = value
         if value then
-            ns:SetDisplayPosition(Options().framePositionX, Options().framePositionY)
+            for _, movable in ipairs(MOVABLE) do
+                ns:SetMoverPosition(movable.key, Options()[movable.x], Options()[movable.y])
+            end
         end
     end)
     toolbar.snap:SetWidth(100)
@@ -189,9 +239,9 @@ local function CreateToolbar()
 
     toolbar.lock = ns:Button(toolbar, "Lock", 64, 24, function() ns:SetUnlocked(false) end, true)
     toolbar.lock:SetPoint("RIGHT", -8, 0)
-    toolbar.center = ns:Button(toolbar, "Center", 64, 24, function() ns:SetDisplayPosition(0, 0) end)
+    toolbar.center = ns:Button(toolbar, "Center", 64, 24, function() ns:SetMoverPosition(selected, 0, 0) end)
     toolbar.center:SetPoint("RIGHT", toolbar.lock, "LEFT", -6, 0)
-    ns:Tooltip(toolbar.center, "Center", "Moves the reminders to the middle of the screen.")
+    ns:Tooltip(toolbar.center, "Center", "Moves the picked one to the middle of the screen.")
 end
 
 local function CreateOverlay()
@@ -213,22 +263,34 @@ local function CreateOverlay()
         end
     end)
     table.insert(UISpecialFrames, "CrescendoUnlock")
-    CreateMover()
+    for _, movable in ipairs(MOVABLE) do
+        CreateMover(movable)
+    end
     CreateToolbar()
 end
 
---Puts the box over the first reminder and the position in the toolbar
+--Puts a box over each thing that can be moved, and the position of the picked one in the toolbar
 function ns:RefreshUnlock()
-    if not mover then
+    if not toolbar then
         return
     end
     local options = Options()
-    mover:ClearAllPoints()
-    mover:SetPoint("CENTER", UIParent, "CENTER", options.framePositionX, options.framePositionY)
-    mover:SetSize(options.iconSizeW + 2, options.iconSizeH + 2)
-    mover.Paint(false)
-    toolbar.x:SetValue(tostring(options.framePositionX))
-    toolbar.y:SetValue(tostring(options.framePositionY))
+    if Movable(selected).shown and not Movable(selected).shown() then
+        selected = 'reminders'
+    end
+    for _, movable in ipairs(MOVABLE) do
+        local mover = movers[movable.key]
+        local shown = unlocked and (not movable.shown or movable.shown())
+        mover:SetShown(shown)
+        mover:ClearAllPoints()
+        mover:SetPoint("CENTER", UIParent, "CENTER", options[movable.x], options[movable.y])
+        mover:SetSize(movable.size())
+        mover.Paint(false)
+    end
+    local x, y = SelectedPosition()
+    toolbar.picked:SetText(Movable(selected).label)
+    toolbar.x:SetValue(tostring(x))
+    toolbar.y:SetValue(tostring(y))
     toolbar.snap:Refresh()
 end
 
@@ -260,12 +322,13 @@ function ns:SetUnlocked(on)
             window.frame:Hide()
         end
         overlay:Show()
-        mover:Show()
         toolbar:Show()
         ns:RefreshUnlock()
     else
         overlay:Hide()
-        mover:Hide()
+        for _, mover in pairs(movers) do
+            mover:Hide()
+        end
         toolbar:Hide()
         if not previewWasOn and Options().toggleDisplay then
             ns:ToggleDisplay()
@@ -282,5 +345,5 @@ end
 
 --For tests
 function ns:GetUnlockWidgets()
-    return { overlay = overlay, mover = mover, toolbar = toolbar }
+    return { overlay = overlay, mover = movers.reminders, movers = movers, toolbar = toolbar }
 end

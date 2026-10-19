@@ -10,6 +10,7 @@ local DATABASE_VERSION = 3
 -- ramps          ramps[spec][ramp name] = { spellId = spell MRT notes use, steps = steps text, see Core/Ramps.lua }
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
 -- cooldowns      cooldowns[spell id] = cooldown in seconds, seen when it could be read, see Core/Cooldowns.lua
+-- history        history[spec][difficulty slug][encounter id] = earlier versions of the plan, newest first
 -- recordings     recordings[encounter id][difficulty slug] = the longest recorded pull, see Core/Test.lua
 -- ui             what is selected in the window
 local defaults = {
@@ -34,7 +35,17 @@ local defaults = {
         snapToGrid = true,
         hideOnCooldown = false,
         sound = 'none',
-        soundOn = 'all'
+        soundOn = 'all',
+        followRaid = true,
+        readyCheck = true,
+        nextUp = true,
+        nextUpCount = 3,
+        nextUpX = 0,
+        nextUpY = -150,
+        spokenCountdown = false,
+        review = true,
+        displayStyle = 'icon',
+        barWidth = 260
     },
     plans = {},
     testPlans = {},
@@ -229,6 +240,45 @@ local function Plans()
         return ns.characterDb.plans
     end
     return ns.db.plans
+end
+
+--Earlier versions of each plan, newest first, kept where the plans are kept
+local HISTORY_SIZE = 10
+
+local function History(specKey, diffSlug, encounterId)
+    local store = ns.characterDb.perCharacter and ns.characterDb or ns.db
+    if type(store.history) ~= 'table' then
+        store.history = {}
+    end
+    return Child(Child(Child(store.history, specKey), diffSlug), tostring(encounterId))
+end
+
+--Keeps a plan as it is before a change: { time, text, reason }. With throttle, not when a copy for the same reason was kept
+--that many seconds ago, so edit after edit keeps one copy
+function ns:BackupPlan(specKey, diffSlug, encounterId, reason, throttle)
+    local text = ns:GetPlan(specKey, diffSlug, encounterId)
+    if not text:find('%S') then
+        return
+    end
+    local history = History(specKey, diffSlug, encounterId)
+    local newest = history[1]
+    if newest and (newest.text == text or (throttle and newest.reason == reason and time() - newest.time < throttle)) then
+        return
+    end
+    table.insert(history, 1, { time = time(), text = text, reason = reason })
+    while #history > HISTORY_SIZE do
+        table.remove(history)
+    end
+end
+
+function ns:GetPlanHistory(specKey, diffSlug, encounterId)
+    return History(specKey, diffSlug, encounterId)
+end
+
+--Puts an earlier version of a plan back, keeping the plan it replaces
+function ns:RestorePlan(specKey, diffSlug, encounterId, version)
+    ns:BackupPlan(specKey, diffSlug, encounterId, "Before restoring an earlier version")
+    ns:SetPlan(specKey, diffSlug, encounterId, version.text)
 end
 
 function ns:ArePlansPerCharacter()

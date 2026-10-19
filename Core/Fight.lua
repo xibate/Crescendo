@@ -10,7 +10,9 @@ function ns:StartFight(specKey, encounterId)
         running = true,
         specKey = specKey,
         encounterId = encounterId,
-        start = GetTime()
+        start = GetTime(),
+        log = {},
+        stagesSeen = { ['1'] = true }
     }
     ns.fight.ticker = C_Timer.NewTicker(0.5, function()
         ns:UpdateFight()
@@ -40,6 +42,9 @@ function ns:StartPhase(phase)
     end
     ns.fight.phase = phase
     ns.fight.phaseStart = GetTime()
+    if ns.fight.stagesSeen then
+        ns.fight.stagesSeen[phase] = true
+    end
 end
 
 --Starts a phase from the /cres phase <number> command, for when no boss mod is installed to report the phases
@@ -64,10 +69,89 @@ end
 --Shows the reminders of a list that are due 'elapsed' seconds after the list's start
 function ns:ShowDueReminders(reminders, elapsed)
     for _, reminder in ipairs(reminders or {}) do
+        if not reminder.shown then
+            ns:CountDown(reminder, reminder.at - elapsed)
+        end
         if not reminder.shown and ns:IsDue(reminder, reminder.at - elapsed) then
             ns:Remind(reminder, reminder.at - elapsed)
         end
     end
+end
+
+--Where a spoken countdown to the press of a ramp or spell starts: 3, or lower when another step of it would be spoken at
+--about the same time, like a spell's 'Soon' at 3 seconds
+function ns:CountdownStart(steps)
+    local from = 3
+    local clash = true
+    while from > 0 and clash do
+        clash = false
+        for _, step in ipairs(steps) do
+            if not step.chargesOf and (step.offset or 0) > 0 and math.abs(step.offset - from) < 0.75 then
+                clash = true
+            end
+        end
+        if clash then
+            from = from - 1
+        end
+    end
+    return from
+end
+
+--With the spoken countdown on, says the last seconds before a press, once it is close enough. Returns true when it was
+--started
+function ns:CountDown(reminder, timeLeft)
+    local options = ns.db.options
+    local from = reminder.countFrom or 0
+    if not options.spokenCountdown or not reminder.press or reminder.counted or from < 1 or timeLeft > from + 0.6 then
+        return false
+    end
+    reminder.counted = true
+    if ns:IsOnCooldownForReminder(reminder, timeLeft) then
+        return true
+    end
+    for number = from, 1, -1 do
+        local delay = timeLeft - number
+        if delay > -0.3 then
+            C_Timer.NewTimer(math.max(0, delay), function()
+                if ns.fight.running then
+                    ns:SendTts(tostring(number))
+                end
+            end)
+        end
+    end
+    return true
+end
+
+--The presses coming up in the fight, soonest first: { reminder, timeLeft }, at most limit of them within window seconds
+function ns:GetUpcoming(limit, window)
+    if not ns.fight.running then
+        return {}
+    end
+    local now = GetTime()
+    local candidates = ns:UpcomingAbilityReminders(now)
+    for _, reminder in ipairs(ns.plan.main or {}) do
+        if not reminder.shown then
+            table.insert(candidates, { reminder = reminder, timeLeft = reminder.at - (now - ns.fight.start) })
+        end
+    end
+    if ns.fight.phase then
+        for _, reminder in ipairs(ns.plan[ns.fight.phase] or {}) do
+            if not reminder.shown then
+                table.insert(candidates, { reminder = reminder, timeLeft = reminder.at - (now - ns.fight.phaseStart) })
+            end
+        end
+    end
+    local upcoming = {}
+    for _, candidate in ipairs(candidates) do
+        if candidate.reminder.press and candidate.timeLeft > -0.25 and candidate.timeLeft <= window then
+            table.insert(upcoming, candidate)
+        end
+    end
+    table.sort(upcoming, function(a, b) return a.timeLeft < b.timeLeft end)
+    while #upcoming > limit do
+        table.remove(upcoming)
+    end
+    return upcoming
 end
 
 --A reminder is due when its time comes. One tied to a spell's charges shows earlier, once the charges need all the

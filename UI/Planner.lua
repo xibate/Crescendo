@@ -239,7 +239,7 @@ end
 
 local Refresh
 local ConflictTooltip
-local CopyMenuItems, CopyPlanTo
+local CopyMenuItems, CopyPlanTo, HistoryMenuItems
 local NotReadyCasts
 
 local function Column(page, x, width)
@@ -735,6 +735,8 @@ end
 local function SaveAssignments()
     local _, _, boss = Selected()
     if planner.ability then
+        local specKey, diffSlug = Selected()
+        ns:BackupPlan(specKey, diffSlug, boss, "Before editing assignments", 600)
         SetPlanText(ns:SetAbilityAssignments(GetPlanText(), boss, planner.ability, planner.assignments, planner.scope))
     end
 end
@@ -1323,6 +1325,7 @@ function CopyPlanTo(target)
         return
     end
     local old = ns:GetPlan(specKey, diffSlug, target.encounterId)
+    ns:BackupPlan(specKey, diffSlug, target.encounterId, "Before a copy over it")
     ns:SetPlan(specKey, diffSlug, target.encounterId, text)
     planner.copyUndo = old:find('%S') and { specKey = specKey, diffSlug = diffSlug, encounterId = target.encounterId, text = old, name = name } or nil
     Refresh()
@@ -1332,6 +1335,22 @@ function CopyPlanTo(target)
     end
     planner.planStatus:SetText(status)
     planner.planStatus:SetTextColor(Accent())
+end
+
+--Earlier versions of the plan to restore, newest first
+function HistoryMenuItems()
+    local specKey, diffSlug, boss = Selected()
+    local history = ns:GetPlanHistory(specKey, diffSlug, boss)
+    local items = { { text = "Restore an earlier version", header = true } }
+    for _, version in ipairs(history) do
+        local lines = select(2, version.text:gsub('\n', '')) + 1
+        table.insert(items, { text = date("%d %b %H:%M", version.time) .. "  |cff8a8a8a" .. version.reason .. ", " .. lines ..
+            (lines == 1 and " line" or " lines") .. "|r", value = version })
+    end
+    if #history == 0 then
+        table.insert(items, { text = "No earlier versions yet", header = true })
+    end
+    return items
 end
 
 local function BuildPlanTextTab(panel)
@@ -1350,6 +1369,10 @@ local function BuildPlanTextTab(panel)
         local text = planner.planBox:GetText()
         local result = ns:CheckPlan(text)
         if result == true then
+            local specKey, diffSlug, boss = Selected()
+            if text ~= GetPlanText() then
+                ns:BackupPlan(specKey, diffSlug, boss, "Before editing the plan text")
+            end
             SetPlanText(text)
             planner.planBox:ClearFocus()
             Refresh()
@@ -1375,7 +1398,18 @@ local function BuildPlanTextTab(panel)
             planner.planStatus:SetTextColor(1, 1, 1, 0.53)
         end
     end)
-    planner.planUndo:SetPoint("LEFT", planner.planCopy, "RIGHT", 8, 0)
+    planner.planHistory = ns:Dropdown(tab, 100, 26, function() return "History" end, HistoryMenuItems, function(version)
+        local specKey, diffSlug, boss = Selected()
+        ns:RestorePlan(specKey, diffSlug, boss, version)
+        planner.copyUndo = nil
+        Refresh()
+        planner.planStatus:SetText("Restored the version from " .. date("%d %b %H:%M", version.time) .. ", the plan before is in History")
+        planner.planStatus:SetTextColor(Accent())
+    end)
+    planner.planHistory:SetPoint("LEFT", planner.planCopy, "RIGHT", 8, 0)
+    ns:Tooltip(planner.planHistory, "History", "Earlier versions of this plan, kept before an import, a copy over it, taking times from a note, " ..
+        "saving the plan text and editing assignments (one every ten minutes). Pick one to put it back.")
+    planner.planUndo:SetPoint("LEFT", planner.planHistory, "RIGHT", 8, 0)
     planner.planStatus = ns:Text(tab, 11, theme.dim)
     planner.planStatus:SetPoint("BOTTOMLEFT", 0, 44)
     planner.planStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
