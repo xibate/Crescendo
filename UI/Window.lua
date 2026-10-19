@@ -502,9 +502,17 @@ function ns:ShowPage(key)
 end
 
 --Sets the window's size, kept within what fits the pages and the screen, saves it and draws the page again
+local function Scale()
+    return ns.db.options.windowScale or 1
+end
+
+--The biggest the window can be at its scale: the screen
+local function MaxSize()
+    return math.max(MIN_WIDTH, (UIParent:GetWidth() or 10000) / Scale() - 20), math.max(MIN_HEIGHT, (UIParent:GetHeight() or 10000) / Scale() - 20)
+end
+
 function ns:SetWindowSize(width, height)
-    local maxWidth = math.max(MIN_WIDTH, (UIParent:GetWidth() or 10000) - 20)
-    local maxHeight = math.max(MIN_HEIGHT, (UIParent:GetHeight() or 10000) - 20)
+    local maxWidth, maxHeight = MaxSize()
     width = math.floor(math.max(MIN_WIDTH, math.min(maxWidth, width or WIDTH)) + 0.5)
     height = math.floor(math.max(MIN_HEIGHT, math.min(maxHeight, height or HEIGHT)) + 0.5)
     UI().windowSize = (width ~= WIDTH or height ~= HEIGHT) and { width, height } or nil
@@ -512,6 +520,19 @@ function ns:SetWindowSize(width, height)
         window.width, window.height = width, height
         window.frame:SetSize(width, height)
         ns:RefreshWindow()
+    end
+end
+
+--Draws the window bigger or smaller, keeping it on the screen
+function ns:SetWindowScale(scale)
+    ns.db.options.windowScale = math.max(0.6, math.min(1.5, scale or 1))
+    if window then
+        window.frame:SetScale(ns.db.options.windowScale)
+        if window.frame.SetResizeBounds then
+            local maxWidth, maxHeight = MaxSize()
+            window.frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, maxWidth, maxHeight)
+        end
+        ns:SetWindowSize(window.width, window.height)
     end
 end
 
@@ -524,9 +545,10 @@ function ns:OpenWindow(key)
     if not frame:IsShown() then
         ns:SelectCurrentBoss()
     end
+    frame:SetScale(Scale())
     if frame.SetResizeBounds then
-        frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, math.max(MIN_WIDTH, (UIParent:GetWidth() or 10000) - 20),
-            math.max(MIN_HEIGHT, (UIParent:GetHeight() or 10000) - 20))
+        local maxWidth, maxHeight = MaxSize()
+        frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, maxWidth, maxHeight)
     end
     local size = UI().windowSize
     window.width, window.height = size and size[1] or WIDTH, size and size[2] or HEIGHT

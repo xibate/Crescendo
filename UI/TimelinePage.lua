@@ -17,6 +17,7 @@ local PANEL_H = 214
 local LEFT_W = 240
 local RIGHT_W = 260
 local DIAMOND = "Interface/Addons/Crescendo/Media/diamond"
+local HATCH = "Interface/Addons/Crescendo/Media/hatch"
 
 local page
 
@@ -175,7 +176,7 @@ local function BuildChart(frame)
     ns:Fill(chart, theme.well)
     ns:Border(chart, theme.border)
     page.chart = chart
-    page.bands, page.edges, page.stageLabels, page.stageBoxes = {}, {}, {}, {}
+    page.bands, page.hatches, page.stageLabels, page.stageBoxes = {}, {}, {}, {}
     page.minorTicks, page.majorTicks, page.tickLabels = {}, {}, {}
 
     --The time bar: a tick every 10 seconds, a longer one with the time every 30
@@ -520,13 +521,13 @@ local function StageLabel(boss, stage)
 end
 
 local function DrawStages(stages, boss)
-    for _, pool in ipairs({ page.bands, page.edges, page.stageLabels, page.stageBoxes }) do
+    for _, pool in ipairs({ page.bands, page.hatches, page.stageLabels, page.stageBoxes }) do
         for _, item in ipairs(pool) do
             item:Hide()
         end
     end
     local r, g, b = ns:GetAccent()
-    local edges, boxes = 0, 0
+    local hatches, boxes = 0, 0
     for index, stage in ipairs(stages) do
         local finish = stages[index + 1] and stages[index + 1].at or page.duration
         local x, width = X(stage.at), math.max(1, X(finish) - X(stage.at))
@@ -540,28 +541,39 @@ local function DrawStages(stages, boss)
         label:ClearAllPoints()
         label:SetText(StageLabel(boss, stage.stage))
         if intermission then
-            --An intermission stands out: tinted, edged and its name on an accent box
-            band:SetColorTexture(r, g, b, 0.11)
-            for _, edgeX in ipairs({ x, x + width - 1 }) do
-                edges = edges + 1
-                local edge = Pooled(page.edges, edges, function() return page.chart:CreateTexture(nil, "BACKGROUND", nil, 2) end)
-                edge:ClearAllPoints()
-                edge:SetPoint("TOPLEFT", page.chart, "TOPLEFT", edgeX, -RULER_H)
-                edge:SetPoint("BOTTOMLEFT", page.chart, "BOTTOMLEFT", edgeX, 1)
-                edge:SetWidth(1)
-                edge:SetColorTexture(r, g, b, 0.7)
-            end
+            --An intermission stands out: striped through every lane, its name in an outlined box
+            band:SetColorTexture(r, g, b, 0.04)
+            hatches = hatches + 1
+            local hatch = Pooled(page.hatches, hatches, function()
+                local texture = page.chart:CreateTexture(nil, "BACKGROUND", nil, 2)
+                texture:SetTexture(HATCH, "REPEAT", "REPEAT")
+                texture:SetHorizTile(true)
+                texture:SetVertTile(true)
+                return texture
+            end)
+            hatch:ClearAllPoints()
+            hatch:SetPoint("TOPLEFT", page.chart, "TOPLEFT", x, -RULER_H)
+            hatch:SetPoint("BOTTOMLEFT", page.chart, "BOTTOMLEFT", x, 1)
+            hatch:SetWidth(width)
+            hatch:SetVertexColor(r, g, b, 0.16)
             boxes = boxes + 1
-            local box = Pooled(page.stageBoxes, boxes, function() return page.stageRow:CreateTexture(nil, "ARTWORK") end)
+            local box = Pooled(page.stageBoxes, boxes, function()
+                local frame = CreateFrame("Frame", nil, page.stageRow)
+                ns:Fill(frame, theme.window)
+                frame.setBorder = ns:Border(frame)
+                return frame
+            end)
             box:ClearAllPoints()
             box:SetPoint("LEFT", page.stageRow, "LEFT", x, 0)
             box:SetSize(width, 18)
-            box:SetColorTexture(r, g, b, 0.9)
+            box.setBorder(r, g, b, 1)
+            label:SetParent(box)
             label:SetPoint("CENTER", box, "CENTER", 0, 0)
             label:SetWidth(math.max(1, width - 4))
             label:SetJustifyH("CENTER")
-            label:SetTextColor(0.03, 0.07, 0.05, 1)
+            label:SetTextColor(r, g, b, 1)
         else
+            label:SetParent(page.stageRow)
             band:SetColorTexture(1, 1, 1, index % 2 == 0 and 0.035 or 0.015)
             label:SetPoint("LEFT", page.stageRow, "LEFT", x + 6, 0)
             label:SetWidth(math.max(1, width - 10))

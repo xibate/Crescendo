@@ -93,23 +93,130 @@ local function Build(frame)
     right:SetPoint("TOPRIGHT")
     right:SetPoint("BOTTOMRIGHT")
     right:SetWidth(COLUMN_W)
-    local plansLabel = ns:SectionLabel(right, "Save plans")
-    plansLabel:SetPoint("TOPLEFT", 0, 0)
-    ns:HelpIcon(right, "Save plans", "For all characters: every character uses the same plans and assignments.\n\n" ..
-        "For this character: this character keeps its own plans. The first time, it starts with a copy of the plans for all " ..
-        "characters. Switching back uses the plans for all characters again, this character's own plans are kept for later."):SetPoint("LEFT", plansLabel, "RIGHT", 4, 0)
-    page.plansSaved = Add(ns:Segmented(right, {
-        { text = "For all characters", value = false },
-        { text = "For this character", value = true }
-    }, COLUMN_W, 26, function() return ns:ArePlansPerCharacter() end, function(perCharacter)
-        ns:SetPlansPerCharacter(perCharacter)
+    --Profiles: plans, ramps and settings in named sets, chosen per character
+    local profileLabel = ns:SectionLabel(right, "Profile")
+    profileLabel:SetPoint("TOPLEFT", 0, 0)
+    ns:HelpIcon(right, "Profiles", "A profile keeps plans, plan history, ramps and settings together. Every character uses " ..
+        "Default until you pick another, so characters can share a profile or each have their own. Recorded pulls and the " ..
+        "cooldowns the addon learned are kept for every profile."):SetPoint("LEFT", profileLabel, "RIGHT", 4, 0)
+    local function Status(text, color)
+        page.profileStatus:SetText(text or '')
+        if color == 'error' then
+            page.profileStatus:SetTextColor(theme.error[1], theme.error[2], theme.error[3], 1)
+        else
+            page.profileStatus:SetTextColor(ns:GetAccent())
+        end
+    end
+    local function Changed(text)
+        ns:ResetDisplay()
+        ns:RefreshNextUp()
         ns:RefreshWindow()
+        Status(text)
+    end
+    local function OtherProfiles(withDefault)
+        local items = {}
+        for _, name in ipairs(ns:ProfileNames()) do
+            if name ~= ns:CurrentProfile() and (withDefault or name ~= 'Default') then
+                table.insert(items, { text = name, value = name })
+            end
+        end
+        if #items == 0 then
+            table.insert(items, { text = "No other profiles", header = true })
+        end
+        return items
+    end
+    page.profile = Add(ns:Dropdown(right, 250, 26, function() return ns:CurrentProfile() end, function()
+        local items = { { text = "Use profile", header = true } }
+        for _, name in ipairs(ns:ProfileNames()) do
+            table.insert(items, { text = name, value = name })
+        end
+        return items
+    end, function(name)
+        ns:UseProfile(name)
+        Changed("Using " .. name)
     end))
-    page.plansSaved:SetPoint("TOPLEFT", 0, -18)
+    page.profile:SetPoint("TOPLEFT", 0, -18)
+    page.profileUsers = ns:Text(right, 11, theme.dim)
+    page.profileUsers:SetPoint("LEFT", page.profile, "RIGHT", 10, 0)
 
-    ns:SectionLabel(right, "Commands"):SetPoint("TOPLEFT", 0, -70)
+    page.newProfile = ns:EditBox(right, 250, 26)
+    page.newProfile:SetPoint("TOPLEFT", 0, -52)
+    page.newProfile:SetPlaceholder("New profile name")
+    page.createProfile = ns:Button(right, "Create", 90, 26, function()
+        local name = page.newProfile:GetText()
+        local ok, problem = ns:CreateProfile(name)
+        if ok then
+            page.newProfile:SetValue('')
+            page.newProfile:ClearFocus()
+            Changed("Created and using " .. ns:CurrentProfile() .. ", with the default settings and starter ramps")
+        else
+            Status(problem, 'error')
+        end
+    end, true)
+    page.createProfile:SetPoint("LEFT", page.newProfile, "RIGHT", 8, 0)
+
+    page.copyFrom = Add(ns:Dropdown(right, 250, 26, function() return page.copySource or "Copy from..." end,
+        function() return OtherProfiles(true) end, function(name) page.copySource = name end))
+    page.copyFrom:SetPoint("TOPLEFT", 0, -86)
+    page.copyProfile = ns:ConfirmButton(right, "Copy", "Replace this one?", 140, 26, function()
+        if page.copySource and ns:CopyProfile(page.copySource) then
+            Changed("Copied " .. page.copySource .. " into " .. ns:CurrentProfile())
+            page.copySource = nil
+            page.Refresh()
+        else
+            Status("Pick a profile to copy from first", 'error')
+        end
+    end)
+    page.copyProfile:SetPoint("LEFT", page.copyFrom, "RIGHT", 8, 0)
+    ns:Tooltip(page.copyProfile, "Copy", "Replaces the plans, ramps and settings of the profile in use with those of the one picked. Click twice.")
+
+    page.deleteFrom = Add(ns:Dropdown(right, 250, 26, function() return page.deleteTarget or "Delete a profile..." end,
+        function() return OtherProfiles(false) end, function(name) page.deleteTarget = name end))
+    page.deleteFrom:SetPoint("TOPLEFT", 0, -120)
+    page.deleteProfile = ns:ConfirmButton(right, "Delete", "Delete it?", 140, 26, function()
+        if page.deleteTarget and ns:DeleteProfile(page.deleteTarget) then
+            Status("Deleted " .. page.deleteTarget)
+            page.deleteTarget = nil
+            page.Refresh()
+        else
+            Status("Pick a profile to delete first, not the one in use or Default", 'error')
+        end
+    end)
+    page.deleteProfile:SetPoint("LEFT", page.deleteFrom, "RIGHT", 8, 0)
+
+    page.resetProfile = ns:ConfirmButton(right, "Reset this profile", "Click to reset", 180, 26, function()
+        ns:ResetProfile()
+        Changed("Reset " .. ns:CurrentProfile() .. " to the default settings and starter ramps, without plans")
+    end)
+    page.resetProfile:SetPoint("TOPLEFT", 0, -154)
+    ns:Tooltip(page.resetProfile, "Reset this profile", "Puts the settings and ramps back to the defaults and removes its plans. Click twice.")
+    page.profileStatus = ns:Text(right, 11, theme.dim)
+    page.profileStatus:SetPoint("TOPLEFT", 0, -188)
+    page.profileStatus:SetPoint("RIGHT", right, "RIGHT", 0, 0)
+    page.profileStatus:SetWordWrap(true)
+
+    --The look of the window and the reminders
+    ns:SectionLabel(right, "Look"):SetPoint("TOPLEFT", 0, -222)
+    page.accent = Add(ns:Segmented(right, {
+        { text = "EllesmereUI colour", value = 'ellesmere', tooltip = "The accent colour set in EllesmereUI, or Crescendo's aqua without EllesmereUI." },
+        { text = "Crescendo aqua", value = 'crescendo', tooltip = "Crescendo's own aqua green." },
+        { text = "Own colour...", value = 'custom', tooltip = "A colour you pick." }
+    }, COLUMN_W, 26, function() return Options().accentSource end, function(source)
+        Options().accentSource = source
+        if source == 'custom' then
+            ns:PickAccentColor(function() Changed() end)
+        end
+        Changed()
+    end))
+    page.accent:SetPoint("TOPLEFT", 0, -240)
+    local getScale, setScale = Option('windowScale', function() ns:SetWindowScale(Options().windowScale) end)
+    page.windowScale = Add(ns:Slider(right, "Window scale", COLUMN_W, 0.6, 1.5, 0.05, getScale, setScale,
+        "How big the window is drawn, on top of the game's UI scale."))
+    page.windowScale:SetPoint("TOPLEFT", 0, -276)
+
+    ns:SectionLabel(right, "Commands"):SetPoint("TOPLEFT", 0, -336)
     local commands = ns:Text(right, 11, theme.dim)
-    commands:SetPoint("TOPLEFT", 0, -88)
+    commands:SetPoint("TOPLEFT", 0, -354)
     commands:SetPoint("RIGHT", right, "RIGHT", 0, 0)
     commands:SetWordWrap(true)
     commands:SetJustifyV("TOP")
@@ -120,6 +227,9 @@ local function Build(frame)
         for _, widget in ipairs(page.widgets) do
             widget:Refresh()
         end
+        local users = ns:ProfileUsers(ns:CurrentProfile())
+        page.profileUsers:SetText(users and (users == 1 and "used by this character" or ("used by " .. users .. " characters")) or
+            "for every character without one")
     end
 end
 

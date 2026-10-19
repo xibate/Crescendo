@@ -72,6 +72,19 @@ def diamond(draw):
     draw.polygon([(c, c - r), (c + r, c), (c, c + r), (c - r, c)], fill='white')
 
 
+def hatch():
+    """Diagonal stripes that tile: the intermission band on the Timeline."""
+    size, scale = 16, 8
+    big = Image.new('RGBA', (size * scale, size * scale), (255, 255, 255, 0))
+    pixels = big.load()
+    for x in range(size * scale):
+        for y in range(size * scale):
+            if ((x + y) // scale) % 16 < 6:
+                pixels[x, y] = (255, 255, 255, 255)
+    big.resize((size, size), Image.LANCZOS).save(os.path.join(media, 'hatch.tga'))
+
+
+hatch()
 for name, fn in [('rail-plans', plans), ('rail-timeline', timeline), ('rail-ramps', ramps), ('rail-display', display),
                  ('rail-general', general), ('diamond', diamond)]:
     save(name, fn)

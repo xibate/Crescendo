@@ -19,8 +19,15 @@ ns.theme = theme
 
 local DEFAULT_FONT = "Fonts\\FRIZQT__.TTF"
 
+--The accent colour: EllesmereUI's when it is installed and chosen, Crescendo's aqua, or a colour of the player's own
 function ns:GetAccent()
-    local eui = _G.EllesmereUI
+    local options = ns.db and ns.db.options
+    local source = options and options.accentSource or 'ellesmere'
+    if source == 'custom' and type(options.accentColor) == 'table' then
+        local color = options.accentColor
+        return color.r or theme.accent[1], color.g or theme.accent[2], color.b or theme.accent[3]
+    end
+    local eui = source == 'ellesmere' and _G.EllesmereUI
     if type(eui) == 'table' then
         if type(eui.GetAccentColor) == 'function' then
             local ok, r, g, b = pcall(eui.GetAccentColor)
@@ -34,6 +41,28 @@ function ns:GetAccent()
         end
     end
     return theme.accent[1], theme.accent[2], theme.accent[3]
+end
+
+--Opens the game's colour picker on the accent colour; the colour is kept as it is picked, and put back on cancel
+function ns:PickAccentColor(onChange)
+    local options = ns.db.options
+    local before = options.accentColor or { r = theme.accent[1], g = theme.accent[2], b = theme.accent[3] }
+    local picker = _G.ColorPickerFrame
+    if not (picker and picker.SetupColorPickerAndShow) then
+        return
+    end
+    picker:SetupColorPickerAndShow({
+        r = before.r, g = before.g, b = before.b, hasOpacity = false,
+        swatchFunc = function()
+            local r, g, b = picker:GetColorRGB()
+            options.accentColor = { r = r, g = g, b = b }
+            onChange()
+        end,
+        cancelFunc = function()
+            options.accentColor = before
+            onChange()
+        end
+    })
 end
 
 function ns:GetFont()

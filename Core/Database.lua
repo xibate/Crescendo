@@ -2,15 +2,17 @@ local _, ns = ...
 
 local DATABASE_VERSION = 3
 
---Saved settings:
+--Saved settings. options, plans, history and ramps belong to a profile: profiles[name] holds them, profileKeys["Name -
+--Realm"] says which profile a character uses ('Default' when it says nothing), and while the game runs they are also
+--at the top of CrescendoDB for the profile in use (taken out again at logout so they aren't saved twice):
 -- options        display, text to speech and MRT note settings
--- plans          plans[spec][difficulty slug][encounter id] = plan text, see Core/PlanText.lua. A character can keep its
---                own plans in CrescendoCharacterDB.plans instead, with CrescendoCharacterDB.perCharacter set
--- testPlans      testPlans[spec] = plan text of the old testing mode, no longer used
+-- plans          plans[spec][difficulty slug][encounter id] = plan text, see Core/PlanText.lua
+-- history        history[spec][difficulty slug][encounter id] = earlier versions of the plan, newest first
 -- ramps          ramps[spec][ramp name] = { spellId = spell MRT notes use, steps = steps text, see Core/Ramps.lua }
+--The rest is for every profile:
+-- testPlans      testPlans[spec] = plan text of the old testing mode, no longer used
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
 -- cooldowns      cooldowns[spell id] = cooldown in seconds, seen when it could be read, see Core/Cooldowns.lua
--- history        history[spec][difficulty slug][encounter id] = earlier versions of the plan, newest first
 -- recordings     recordings[encounter id][difficulty slug] = the longest recorded pull, see Core/Test.lua
 -- ui             what is selected in the window
 local defaults = {
@@ -46,7 +48,10 @@ local defaults = {
         countdownFrom = 5,
         review = true,
         displayStyle = 'icon',
-        barWidth = 260
+        barWidth = 260,
+        accentSource = 'ellesmere',
+        accentColor = { r = 0.05, g = 0.82, b = 0.62 },
+        windowScale = 1
     },
     plans = {},
     testPlans = {},
@@ -184,6 +189,167 @@ local function UpdateStarterRamps(db)
     end
 end
 
+------------------------------------------------------------------------------------------------------------------------
+-- Profiles
+------------------------------------------------------------------------------------------------------------------------
+
+local PROFILE_PARTS = { 'options', 'plans', 'history', 'ramps' }
+local DEFAULT_PROFILE = 'Default'
+
+--The character, like profile keys of other addons: 'Name - Realm'
+local function CharacterKey()
+    local realm = GetRealmName and GetRealmName() or ''
+    return (UnitName("player") or "?") .. (realm ~= '' and (" - " .. realm) or "")
+end
+
+--Fills in what a profile is missing: the default options and the starter ramps
+local function FillProfile(profile)
+    for _, part in ipairs(PROFILE_PARTS) do
+        if type(profile[part]) ~= 'table' then
+            profile[part] = {}
+        end
+    end
+    for key, value in pairs(defaults.options) do
+        if profile.options[key] == nil then
+            profile.options[key] = Copy(value)
+        end
+    end
+    profile.options.toggleDisplay = false
+    for _, spec in pairs(ns.specs) do
+        if profile.ramps[spec.key] == nil then
+            profile.ramps[spec.key] = Copy(ns.starterRamps[spec.key] or {})
+        end
+    end
+    return profile
+end
+
+--The first time, the settings there were become the Default profile, and a character that saved its own plans gets a
+--profile of its own with them
+local function SetUpProfiles(db)
+    if type(db.profiles) ~= 'table' or next(db.profiles) == nil then
+        db.profiles = { [DEFAULT_PROFILE] = { options = db.options, plans = db.plans, ramps = db.ramps,
+            history = type(db.history) == 'table' and db.history or {} } }
+    end
+    if type(db.profileKeys) ~= 'table' then
+        db.profileKeys = {}
+    end
+    local key = CharacterKey()
+    local character = ns.characterDb
+    if character.perCharacter and type(character.plans) == 'table' and not db.profileKeys[key] then
+        local base = FillProfile(db.profiles[DEFAULT_PROFILE] or {})
+        db.profiles[key] = { options = Copy(base.options), ramps = Copy(base.ramps), plans = character.plans,
+            history = type(character.history) == 'table' and character.history or {} }
+        db.profileKeys[key] = key
+    end
+    character.perCharacter, character.plans, character.history = nil, nil, nil
+    local name = db.profileKeys[key]
+    if not (name and db.profiles[name]) then
+        name = DEFAULT_PROFILE
+    end
+    ns:UseProfile(name)
+end
+
+--Switches this character to a profile, creating it when it doesn't exist
+function ns:UseProfile(name)
+    local db = ns.db
+    local profile = FillProfile(db.profiles[name] or {})
+    db.profiles[name] = profile
+    db.profileKeys[CharacterKey()] = name ~= DEFAULT_PROFILE and name or nil
+    for _, part in ipairs(PROFILE_PARTS) do
+        db[part] = profile[part]
+    end
+    ns.profileName = name
+end
+
+function ns:CurrentProfile()
+    return ns.profileName
+end
+
+function ns:ProfileNames()
+    local names = {}
+    for name in pairs(ns.db.profiles) do
+        table.insert(names, name)
+    end
+    table.sort(names, function(a, b)
+        if (a == DEFAULT_PROFILE) ~= (b == DEFAULT_PROFILE) then
+            return a == DEFAULT_PROFILE
+        end
+        return a:lower() < b:lower()
+    end)
+    return names
+end
+
+--How many characters use a profile
+function ns:ProfileUsers(name)
+    local count = 0
+    for _, used in pairs(ns.db.profileKeys) do
+        count = count + (used == name and 1 or 0)
+    end
+    if name == DEFAULT_PROFILE then
+        return nil
+    end
+    return count
+end
+
+--A new profile with the default settings and starter ramps, which this character then uses. Returns nil and why when
+--the name can't be used
+function ns:CreateProfile(name)
+    name = (name or ''):match('^%s*(.-)%s*$')
+    if name == '' then
+        return nil, "Type a name for the profile"
+    end
+    if ns.db.profiles[name] then
+        return nil, "There is a profile called " .. name .. " already"
+    end
+    ns.db.profiles[name] = FillProfile({})
+    ns:UseProfile(name)
+    return true
+end
+
+--Replaces the profile in use with a copy of another profile's plans, ramps and settings
+function ns:CopyProfile(from)
+    local source = ns.db.profiles[from]
+    if not source or from == ns.profileName then
+        return false
+    end
+    local profile = ns.db.profiles[ns.profileName]
+    for _, part in ipairs(PROFILE_PARTS) do
+        profile[part] = Copy(source[part])
+    end
+    ns:UseProfile(ns.profileName)
+    return true
+end
+
+--Deletes a profile that isn't in use; characters that used it go back to Default
+function ns:DeleteProfile(name)
+    if name == ns.profileName or name == DEFAULT_PROFILE or not ns.db.profiles[name] then
+        return false
+    end
+    ns.db.profiles[name] = nil
+    for character, used in pairs(ns.db.profileKeys) do
+        if used == name then
+            ns.db.profileKeys[character] = nil
+        end
+    end
+    return true
+end
+
+--Puts the profile in use back to the default settings and starter ramps, without plans
+function ns:ResetProfile()
+    ns.db.profiles[ns.profileName] = FillProfile({})
+    ns:UseProfile(ns.profileName)
+end
+
+--The profile's parts are taken out of the top of the saved settings at logout, so they are saved once, in the profile
+function ns:BeforeLogout()
+    if not ns.db then
+        return
+    end
+    for _, part in ipairs(PROFILE_PARTS) do
+        ns.db[part] = nil
+    end
+end
+
 --Creates the saved settings or fills in what is missing. Only nil is replaced, so options turned off stay off
 function ns:InitDatabase()
     --The addon was called Zynx Ramp Helper before, its settings move over once
@@ -222,10 +388,8 @@ function ns:InitDatabase()
     if type(CrescendoCharacterDB) ~= 'table' then
         CrescendoCharacterDB = {}
     end
-    if type(CrescendoCharacterDB.plans) ~= 'table' then
-        CrescendoCharacterDB.plans = {}
-    end
     ns.characterDb = CrescendoCharacterDB
+    SetUpProfiles(db)
 end
 
 --Puts the display, text to speech and MRT note options back to their defaults
@@ -235,11 +399,8 @@ function ns:ResetOptions()
     end
 end
 
---Plans are saved for all characters, or for each character on its own when the character chose that
+--The plans of the profile in use
 local function Plans()
-    if ns.characterDb.perCharacter then
-        return ns.characterDb.plans
-    end
     return ns.db.plans
 end
 
@@ -247,11 +408,10 @@ end
 local HISTORY_SIZE = 10
 
 local function History(specKey, diffSlug, encounterId)
-    local store = ns.characterDb.perCharacter and ns.characterDb or ns.db
-    if type(store.history) ~= 'table' then
-        store.history = {}
+    if type(ns.db.history) ~= 'table' then
+        ns.db.history = {}
     end
-    return Child(Child(Child(store.history, specKey), diffSlug), tostring(encounterId))
+    return Child(Child(Child(ns.db.history, specKey), diffSlug), tostring(encounterId))
 end
 
 --Keeps a plan as it is before a change: { time, text, reason }. With throttle, not when a copy for the same reason was kept
@@ -280,19 +440,6 @@ end
 function ns:RestorePlan(specKey, diffSlug, encounterId, version)
     ns:BackupPlan(specKey, diffSlug, encounterId, "Before restoring an earlier version")
     ns:SetPlan(specKey, diffSlug, encounterId, version.text)
-end
-
-function ns:ArePlansPerCharacter()
-    return ns.characterDb.perCharacter == true
-end
-
---Saves this character's plans on their own, or with all characters again. A character that starts saving its own plans
---starts with a copy of the plans for all characters
-function ns:SetPlansPerCharacter(perCharacter)
-    if perCharacter and next(ns.characterDb.plans) == nil then
-        ns.characterDb.plans = Copy(ns.db.plans)
-    end
-    ns.characterDb.perCharacter = perCharacter or nil
 end
 
 function ns:GetPlan(specKey, diffSlug, encounterId)

@@ -52,8 +52,11 @@ end)
 
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("ADDON_LOADED")
-loader:SetScript("OnEvent", function(_, _, addonName)
-    if addonName == "Crescendo" then
+loader:RegisterEvent("PLAYER_LOGOUT")
+loader:SetScript("OnEvent", function(_, event, addonName)
+    if event == "PLAYER_LOGOUT" then
+        ns:BeforeLogout()
+    elseif addonName == "Crescendo" then
         ns:InitDatabase()
         ns:SetUpCommands()
     end
