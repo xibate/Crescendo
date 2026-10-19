@@ -71,13 +71,23 @@ local function Build(frame)
     end)
     page.nextUpCount = Add(ns:Slider(left, "How many to show", COLUMN_W - 24, 1, 5, 1, getCount, setCount))
     page.nextUpCount:SetPoint("TOPLEFT", 24, -186)
-    page.spokenCountdown = Check(left, "Count down the last seconds before a press", 'spokenCountdown',
-        "Says 5, 4, 3, 2, 1 before the press of a ramp or spell, a moment early so the words land on time. A number is " ..
-        "left out while another step of it is spoken, like a spell's Soon. Needs Speak the reminders on the Display page.", -240)
+    --Before a press: the spell's Soon message, or a spoken countdown in its place
+    local sayLabel = ns:Text(left, 12)
+    sayLabel:SetPoint("TOPLEFT", 0, -242)
+    sayLabel:SetText("Before a press, say")
+    local getSay, setSay = Option('spokenCountdown')
+    page.beforePress = Add(ns:Segmented(left, {
+        { text = "Soon", value = false, tooltip = "Says the Soon message of a spell or trinket, like Power Word: Barrier Soon, " ..
+            "a few seconds before it. Set how many seconds with Spell countdown on the Display page." },
+        { text = "A countdown", value = true, tooltip = "Says 5, 4, 3, 2, 1 before the press of a ramp or spell instead, a " ..
+            "moment early so the words land on time. The Soon message still shows, without being spoken. A number is left " ..
+            "out while another step of a ramp is spoken." }
+    }, COLUMN_W - 24, 24, function() return getSay() == true end, function(value) setSay(value) end))
+    page.beforePress:SetPoint("TOPLEFT", 0, -262)
     local getFrom, setFrom = Option('countdownFrom')
     page.countdownFrom = Add(ns:Slider(left, "Count down from", COLUMN_W - 24, 3, 10, 1, getFrom, setFrom,
         "The first number of the countdown, in seconds before the press."))
-    page.countdownFrom:SetPoint("TOPLEFT", 24, -266)
+    page.countdownFrom:SetPoint("TOPLEFT", 24, -296)
 
     local right = CreateFrame("Frame", nil, frame)
     right:SetPoint("TOPRIGHT")

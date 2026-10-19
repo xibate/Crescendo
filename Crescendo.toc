@@ -1,5 +1,5 @@
 ## Interface: 120100, 120105
-## Version: 3.6.0
+## Version: 3.6.1
 ## Title: Crescendo
 ## IconTexture: Interface/Addons/Crescendo/Media/logo
 ## Notes: Plans and reminders for healer ramps and cooldowns in raid

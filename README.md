@@ -39,7 +39,7 @@ Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5
 - **Check my plan at a ready check**: a line in chat with your plan for the boss you're about to pull, and what is wrong with it: no plan, names that aren't a ramp, spell or equipped trinket, spells you don't have talented, trinkets without a use effect, and uses that won't be ready in time on the recorded pull.
 - **Review each pull**: after a pull, a window lists what was left out because it was on cooldown and what never triggered, with why (a stage that didn't come, no boss mod bar for it, none of its casts came). When everything showed, a line in chat says so.
 - **Show what's next**: a strip with your next presses and how long until each, moved with Unlock like the reminders.
-- **Count down the last seconds before a press**: says 5, 4, 3, 2, 1 before a press (**Count down from** sets the first number), each a moment early so the words land on time. A number is left out while another step is spoken, like a spell's Soon.
+- **Before a press, say**: **Soon** says a spell's or trinket's Soon message a few seconds before it; **A countdown** says 5, 4, 3, 2, 1 instead (**Count down from** sets the first number), each a moment early so the words land on time. The Soon message still shows on screen. A number is left out while another step of a ramp is spoken.
 - **Save plans** for all characters or for this character only (it starts with a copy of the plans for all characters).
 
 ### Testing

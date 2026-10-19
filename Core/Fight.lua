@@ -82,15 +82,15 @@ end
 local SPEECH_LEAD = 0.25
 
 --The numbers a spoken countdown to the press of a ramp or spell says: from the start set on the General page down to 1.
---A number is left out when another step of it is spoken then, from just before that step until its words are said,
---like a spell's 'Soon' at 3 seconds
+--A number is left out when another step of it is spoken then, from just before that step until its words are said.
+--A step with a countdown on its icon, like a spell's 'Soon', isn't spoken with the countdown on, so it doesn't count
 function ns:CountdownNumbers(steps)
     local numbers = {}
     for number = math.floor(ns.db.options.countdownFrom or 5), 1, -1 do
         local clash = false
         for _, step in ipairs(steps) do
             local offset = step.offset or 0
-            if not step.chargesOf and offset > 0 and number > offset - 1.25 and number < offset + 0.75 then
+            if not step.chargesOf and not step.countdown and offset > 0 and number > offset - 1.25 and number < offset + 0.75 then
                 clash = true
             end
         end
