@@ -96,6 +96,23 @@ local function Build(frame)
         y = y - 52
     end
 
+    --Where plans are saved
+    local plansLabel = ns:SectionLabel(left, "Save plans")
+    plansLabel:SetPoint("TOPLEFT", 0, y - 14)
+    ns:HelpIcon(left, "Save plans", "For all characters: every character uses the same plans and assignments.\n\n" ..
+        "For this character: this character keeps its own plans. The first time, it starts with a copy of the plans for all " ..
+        "characters. Switching back uses the plans for all characters again, this character's own plans are kept for later."):SetPoint("LEFT", plansLabel, "RIGHT", 4, 0)
+    page.plansSaved = Add(ns:Segmented(left, {
+        { text = "For all characters", value = false },
+        { text = "For this character", value = true }
+    }, SLIDER_W, 26, function() return ns:ArePlansPerCharacter() end, function(perCharacter)
+        ns:SetPlansPerCharacter(perCharacter)
+        if ns.RefreshWindow then
+            ns:RefreshWindow()
+        end
+    end))
+    page.plansSaved:SetPoint("TOPLEFT", 0, y - 30)
+
     --Right: voice, reminders and MRT notes
     local right = CreateFrame("Frame", nil, frame)
     right:SetPoint("TOPRIGHT")

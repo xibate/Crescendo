@@ -73,10 +73,49 @@ local function After(seconds, callback)
     table.insert(ns.fight.test.timers, timer)
 end
 
---Starts a test of a boss plan. Without 'cast' it replays the recorded pull, with the plan's times and ability lines.
---With cast = { ability, count, seconds, phase } only the ability lines of that ability run, for one cast in that many
---seconds, in that stage when one is given
-function ns:StartTest(specKey, diffSlug, encounterId, cast)
+--Starts a recorded pull at a point in it, as if the fight had run until then: the stage it was in, the bars still running
+--with the time they have left, and the plan's reminders before then already done
+local function ReplayFrom(record, startAt)
+    local stage, stageAt
+    local open = {}
+    for _, event in ipairs(record.events) do
+        local id = event.key ~= nil and (tostring(event.source) .. ':' .. tostring(event.key))
+        if event.at >= startAt then
+            After(event.at - startAt, function() Replay(event) end)
+        elseif event.kind == 'stage' then
+            stage, stageAt = event.stage, event.at
+        elseif event.kind == 'bar' then
+            open[id] = { event = event, landsAt = event.at + event.duration }
+        elseif event.kind == 'update' and open[id] then
+            open[id].landsAt = event.at + event.duration
+        elseif event.kind == 'stop' then
+            open[id] = nil
+        end
+    end
+    if stage then
+        ns:StartPhaseFromBossMod(stage)
+        ns.fight.phaseStart = GetTime() - (startAt - stageAt)
+    end
+    for phase, reminders in pairs(ns.plan) do
+        local elapsed = phase == 'main' and startAt or (phase == ns.fight.phase and startAt - stageAt)
+        for _, reminder in ipairs(elapsed and reminders or {}) do
+            if reminder.at < elapsed - 0.25 then
+                reminder.shown = true
+            end
+        end
+    end
+    for _, bar in pairs(open) do
+        if bar.landsAt > startAt then
+            local event = bar.event
+            ns:OnBossModBar(event.source, event.key, event.text, bar.landsAt - startAt, event.spellId, event.count)
+        end
+    end
+end
+
+--Starts a test of a boss plan. Without 'cast' it replays the recorded pull, with the plan's times and ability lines,
+--from startAt seconds into it when that is given. With cast = { ability, count, seconds, phase } only the ability lines
+--of that ability run, for one cast in that many seconds, in that stage when one is given
+function ns:StartTest(specKey, diffSlug, encounterId, cast, startAt)
     if ns.fight.running and not ns.fight.test then
         ns:WriteOutput("Tests can't run during a boss fight")
         return false
@@ -101,13 +140,13 @@ function ns:StartTest(specKey, diffSlug, encounterId, cast)
         ns.fight.test.ability = name
         duration = cast.seconds + 3
     else
-        for _, event in ipairs(record.events) do
-            After(event.at, function() Replay(event) end)
-        end
+        startAt = math.max(0, math.min(startAt or 0, record.duration))
+        ns.fight.start = GetTime() - startAt
+        ReplayFrom(record, startAt)
         duration = record.duration + 3
     end
     ns.fight.test.duration = duration
-    After(duration, function() ns:StopTest() end)
+    After(duration - (cast and 0 or startAt), function() ns:StopTest() end)
     ns:OnTestChanged()
     return true
 end

@@ -2,6 +2,7 @@ local _, ns = ...
 
 --Starts the reminders when a raid boss in the boss list is pulled
 local function OnEncounterStart(encounterId, encounterName, difficultyId)
+    difficultyId = ns.difficultyAliases[difficultyId] or difficultyId
     if not ns.difficulties[difficultyId] then
         return
     end

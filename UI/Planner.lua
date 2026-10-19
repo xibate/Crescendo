@@ -31,13 +31,8 @@ end
 -- Selection
 ------------------------------------------------------------------------------------------------------------------------
 
-local function SortedBossIds()
-    local ids = {}
-    for encounterId in pairs(ns.bosses) do
-        table.insert(ids, encounterId)
-    end
-    table.sort(ids)
-    return ids
+local function FirstBoss()
+    return ns.raids[1].bosses[1].encounterId
 end
 
 --The spec selected in the window, the player's own spec at first
@@ -64,7 +59,7 @@ local function Selected()
         ui.difficulty = 16
     end
     if not ns.bosses[ui.boss or 0] then
-        ui.boss = SortedBossIds()[1]
+        ui.boss = FirstBoss()
     end
     return ns:SelectedSpec(), ns.difficulties[ui.difficulty].slug, ui.boss
 end
@@ -85,8 +80,9 @@ local function SpellNameAndIcon(spell, fallbackName)
 end
 
 --The boss's abilities to list: the known ones, then ones a boss mod showed bars for, then ones only named in the plan.
---A boss can have two abilities with the same name, but a seen or planned ability with a listed name is the same one
-function ns:GetPlannerAbilities(encounterId, planText)
+--A boss can have two abilities with the same name, but a seen or planned ability with a listed name is the same one.
+--On Heroic the abilities that are only on Mythic are left out
+function ns:GetPlannerAbilities(encounterId, planText, heroic)
     local abilities, seenIds, seenNames = {}, {}, {}
     local function Add(ability, matchName)
         if (ability.spellId and seenIds[ability.spellId]) or (matchName and ability.name and seenNames[ability.name:lower()]) then
@@ -101,7 +97,9 @@ function ns:GetPlannerAbilities(encounterId, planText)
         table.insert(abilities, ability)
     end
     for _, ability in ipairs(ns.bossAbilities[encounterId] or {}) do
-        Add({ spellId = ability.spellId, name = ability.name, group = ability.group, phases = ability.phases }, false)
+        if not (heroic and ability.mythic) then
+            Add({ spellId = ability.spellId, name = ability.name, group = ability.group, phases = ability.phases, mythic = ability.mythic }, false)
+        end
     end
     local seen = ns.db.seenAbilities[encounterId] or {}
     local seenList = {}
@@ -134,25 +132,18 @@ local function Seconds(value)
     return string.format("%gs", math.floor(value * 10 + 0.5) / 10)
 end
 
-local function Ordinal(number)
-    local last, lastTwo = number % 10, number % 100
-    if lastTwo >= 11 and lastTwo <= 13 then
-        return number .. "th"
-    end
-    return number .. (last == 1 and "st" or last == 2 and "nd" or last == 3 and "rd" or "th")
+--The first casts of a pattern, like '2, 4, 6...'
+local function CastNumbers(every, from)
+    return from .. ", " .. (from + every) .. ", " .. (from + 2 * every) .. "..."
 end
 
---Which casts an assignment is for, in words
+--Which casts an assignment is for, by their numbers: 'every cast', 'casts 2, 4' or 'casts 1, 4, 7...'
 local function CastsText(assignment)
     if assignment.casts then
-        return "cast " .. table.concat(assignment.casts, ', ')
+        return (#assignment.casts == 1 and "cast " or "casts ") .. table.concat(assignment.casts, ', ')
     end
     if assignment.every and assignment.every > 1 then
-        local text = assignment.every == 2 and "every other cast" or ("every " .. Ordinal(assignment.every) .. " cast")
-        if (assignment.from or 1) > 1 then
-            text = text .. " from cast " .. assignment.from
-        end
-        return text
+        return "casts " .. CastNumbers(assignment.every, assignment.from or 1)
     end
     return "every cast"
 end
@@ -274,23 +265,34 @@ local function BuildLeft(page)
     planner.difficulty:SetPoint("TOPLEFT", 0, -72)
 
     ns:SectionLabel(left, "Boss"):SetPoint("TOPLEFT", 0, -112)
+    planner.bossList = ns:ScrollList(left)
+    planner.bossList:SetPoint("TOPLEFT", 0, -128)
+    planner.bossList:SetPoint("BOTTOMRIGHT", 0, 112)
     planner.bossRows = {}
-    local y = -128
-    for _, encounterId in ipairs(SortedBossIds()) do
-        local row = ns:ListRow(left, ROW_H)
-        row:SetPoint("TOPLEFT", 0, y)
-        row:SetPoint("TOPRIGHT", 0, y)
-        row.label:SetPoint("LEFT", 12, 0)
-        row.label:SetPoint("RIGHT", -8, 0)
-        row.label:SetText(ns.bosses[encounterId].name)
-        row.encounterId = encounterId
-        row:SetScript("OnClick", function()
-            UI().boss = encounterId
-            UI().ability = nil
+    planner.raidHeaders = {}
+    for index, raid in ipairs(ns.raids) do
+        local header = ns:FoldHeader(planner.bossList.content, 24)
+        header.label:SetText(raid.name:upper())
+        header.raid = raid
+        header:SetScript("OnClick", function()
+            local folded = UI().foldedRaids
+            folded[raid.name] = not header.folded
             Refresh()
         end)
-        planner.bossRows[encounterId] = row
-        y = y - ROW_H
+        planner.raidHeaders[index] = header
+        for _, boss in ipairs(raid.bosses) do
+            local row = ns:ListRow(planner.bossList.content, ROW_H)
+            row.label:SetPoint("LEFT", 20, 0)
+            row.label:SetPoint("RIGHT", -8, 0)
+            row.label:SetText(boss.name)
+            row.encounterId = boss.encounterId
+            row:SetScript("OnClick", function()
+                UI().boss = boss.encounterId
+                UI().ability = nil
+                Refresh()
+            end)
+            planner.bossRows[boss.encounterId] = row
+        end
     end
 
     planner.replay = ns:Button(left, "Replay pull", LEFT_W, 26, function()
@@ -315,6 +317,44 @@ local function BuildLeft(page)
         "speak as they would in the raid. Nothing has to be pulled, it works anywhere, also while hitting a target dummy.\n\n" ..
         "Without a recorded pull, test one ability with Test cast on the right.")
     testHelp:SetPoint("LEFT", testLabel, "RIGHT", 6, 0)
+end
+
+--Raids are folded and unfolded by clicking their name. A raid starts folded when Config/Bosses.lua says so
+local function RaidFolded(raid)
+    local folded = UI().foldedRaids
+    if folded[raid.name] == nil then
+        folded[raid.name] = raid.collapsed == true
+    end
+    return folded[raid.name]
+end
+
+local function RefreshBosses(selectedBoss)
+    UI().foldedRaids = UI().foldedRaids or {}
+    local list = planner.bossList
+    local y = 0
+    for index, raid in ipairs(ns.raids) do
+        local header = planner.raidHeaders[index]
+        local folded = RaidFolded(raid)
+        local hasSelected = ns.bosses[selectedBoss] and ns.bosses[selectedBoss].raid == raid.name
+        header:SetFolded(folded)
+        header:SetHighlighted(folded and hasSelected)
+        header:ClearAllPoints()
+        header:SetPoint("TOPLEFT", 0, y)
+        header:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+        y = y - 24
+        for _, boss in ipairs(raid.bosses) do
+            local row = planner.bossRows[boss.encounterId]
+            row:SetSelected(boss.encounterId == selectedBoss)
+            row:SetShown(not folded)
+            if not folded then
+                row:ClearAllPoints()
+                row:SetPoint("TOPLEFT", 0, y)
+                row:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+                y = y - ROW_H
+            end
+        end
+    end
+    list:SetContentHeight(-y)
 end
 
 local function RefreshTest()
@@ -482,6 +522,9 @@ local function AbilityTooltip(tooltip, row)
     elseif ability.group then
         tooltip:AddLine(ability.group, 0.7, 0.7, 0.7, true)
     end
+    if ability.mythic then
+        tooltip:AddLine("Mythic only", 1, 0.5, 0.25)
+    end
     if ability.spellId then
         tooltip:AddLine("Spell id " .. ability.spellId, 0.5, 0.5, 0.5)
     end
@@ -547,12 +590,16 @@ local function AbilityRow(index)
 end
 
 local function GroupLabel(index)
-    local label = planner.groupLabels[index]
-    if not label then
-        label = ns:Text(planner.abilityList.content, 10, theme.section)
-        planner.groupLabels[index] = label
+    local header = planner.groupLabels[index]
+    if not header then
+        header = ns:FoldHeader(planner.abilityList.content, 24)
+        header:SetScript("OnClick", function(self)
+            UI().foldedSections[self.key] = not self.folded or nil
+            Refresh()
+        end)
+        planner.groupLabels[index] = header
     end
-    return label
+    return header
 end
 
 local function RefreshAbilities(lines, selected, planText)
@@ -569,17 +616,26 @@ local function RefreshAbilities(lines, selected, planText)
     for _, label in ipairs(planner.groupLabels) do
         label:Hide()
     end
-    local y, rows, labels = -2, 0, 0
+    UI().foldedSections = UI().foldedSections or {}
+    local y, rows, labels, folded, header = -2, 0, 0, false, nil
     for _, line in ipairs(lines) do
         if line.label then
             labels = labels + 1
-            local label = GroupLabel(labels)
-            label:ClearAllPoints()
-            label:SetPoint("TOPLEFT", 10, y - 8)
-            label:SetPoint("RIGHT", list.content, "RIGHT", -10, 0)
-            label:SetText(line.label:upper())
-            label:Show()
+            header = GroupLabel(labels)
+            header.key = boss .. ':' .. AbilityView(boss) .. ':' .. line.label
+            folded = UI().foldedSections[header.key] == true
+            header:SetFolded(folded)
+            header:SetHighlighted(false)
+            header.label:SetText(line.label:upper())
+            header:ClearAllPoints()
+            header:SetPoint("TOPLEFT", 0, y - 2)
+            header:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+            header:Show()
             y = y - 26
+        elseif folded then
+            if line == selected then
+                header:SetHighlighted(true)
+            end
         else
             rows = rows + 1
             local row = AbilityRow(rows)
@@ -614,18 +670,21 @@ local CARD_H = 104
 local OTHER = {}
 
 local CASTS_HELP = "BigWigs and DBM number each cast of an ability in a fight: the bar shows 'Spectral Coils (2)' before " ..
-    "the second one. Pick which casts this is for. With Only some casts, list them like 2,4 or write a pattern like " ..
-    "every 3 from 2.\n\nThe count can start over in a new stage, the same way the boss mod's does."
+    "the second one. Pick which of those numbers this is for. With Pick casts, list them like 2,4 or write a pattern " ..
+    "like every 4 from 2 (casts 2, 6, 10...).\n\nThe count can start over in a new stage, the same way the boss mod's does."
 local BEFORE_HELP = "How many seconds before the ability goes off your ramp or spell should land: the last step of a ramp, " ..
     "or the cast of a spell. The earlier steps of the ramp show before that, as far ahead as the ramp says, so the first " ..
     "message comes in time to start it.\n\nA negative number lands after the ability."
 
 local CAST_CHOICES = {
-    { text = "Every cast" },
-    { text = "Every other cast (1st, 3rd, 5th...)", every = 2, from = 1 },
-    { text = "Every other cast from the 2nd (2nd, 4th...)", every = 2, from = 2 },
-    { text = "Every 3rd cast (1st, 4th, 7th...)", every = 3, from = 1 },
-    { text = "Only some casts...", custom = true }
+    { text = "All casts", numbers = "1, 2, 3, 4..." },
+    { text = "Odd casts", numbers = "1, 3, 5, 7...", every = 2, from = 1 },
+    { text = "Even casts", numbers = "2, 4, 6, 8...", every = 2, from = 2 },
+    { text = "Every 3rd from the 1st", numbers = "1, 4, 7, 10...", every = 3, from = 1 },
+    { text = "Every 3rd from the 2nd", numbers = "2, 5, 8, 11...", every = 3, from = 2 },
+    { text = "Every 3rd from the 3rd", numbers = "3, 6, 9, 12...", every = 3, from = 3 },
+    { text = "Only the 1st cast", numbers = "1", casts = { 1 } },
+    { text = "Pick casts...", numbers = "like 2, 4 or every 4 from 2", custom = true }
 }
 
 --Sets which casts an assignment is for from text: '2,4', 'every 2', 'every 3 from 2' or empty for all. Returns false
@@ -653,7 +712,7 @@ end
 --True when the casts of an assignment aren't one of the plain choices, so the box to write them shows
 local function IsCustomCasts(assignment)
     if assignment.casts then
-        return true
+        return not (#assignment.casts == 1 and assignment.casts[1] == 1)
     end
     if not assignment.every then
         return false
@@ -808,11 +867,11 @@ local function AssignmentCard(index)
     card.beforeText:SetPoint("LEFT", card.plus, "RIGHT", 6, 0)
     card.beforeText:SetText("sec before")
     ns:Tooltip(card.before, "Seconds before", BEFORE_HELP)
-    card.casts = ns:Dropdown(card, 140, 24, function() return card.assignment and Capitalized(CastsText(card.assignment)) or '' end,
+    card.casts = ns:Dropdown(card, 150, 24, function() return card.assignment and Capitalized(CastsText(card.assignment)) or '' end,
         function()
             local items = {}
             for index, choice in ipairs(CAST_CHOICES) do
-                table.insert(items, { text = choice.text, value = index })
+                table.insert(items, { text = choice.text .. "  |cff8a8a8a" .. choice.numbers .. "|r", value = index })
             end
             return items
         end, function(index)
@@ -824,13 +883,13 @@ local function AssignmentCard(index)
                 return
             end
             card.customCasts = false
-            card.assignment.casts, card.assignment.every, card.assignment.from = nil, choice.every, choice.every and choice.from or nil
+            card.assignment.casts, card.assignment.every, card.assignment.from = choice.casts, choice.every, choice.every and choice.from or nil
             SaveAssignments()
             Refresh(true)
         end)
     card.casts:SetPoint("LEFT", card.beforeText, "RIGHT", 8, 0)
     ns:Tooltip(card.casts, "Which casts", CASTS_HELP)
-    card.castsBox = ns:EditBox(card, 64, 24, function(text)
+    card.castsBox = ns:EditBox(card, 54, 24, function(text)
         if SetCasts(card.assignment, text) then
             SaveAssignments()
         end
@@ -956,6 +1015,239 @@ local function BuildAssignmentsTab(panel)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
+-- Right: the timeline of the recorded pull, with the plan's reminders
+------------------------------------------------------------------------------------------------------------------------
+
+local TIMELINE_ROW = { stage = 24, cast = 20, reminder = 18 }
+
+--Opens the ability of a cast on the timeline in the Assignments tab, on its stage when the list is by stage
+local function OpenCast(cast)
+    local _, _, boss = Selected()
+    for _, ability in ipairs(ns:GetPlannerAbilities(boss, GetPlanText(), UI().difficulty == 15)) do
+        if (cast.spellId and ability.spellId == cast.spellId) or (ability.name and ability.name:lower() == cast.name:lower()) then
+            UI().ability = AbilityKey(ability)
+            UI().abilityScope = AbilityView(boss) == 'stage' and cast.stage or 'all'
+            UI().plannerTab = 'assignments'
+            Refresh()
+            return
+        end
+    end
+end
+
+local function TimelineRow(index)
+    local row = planner.timelineRows[index]
+    if row then
+        return row
+    end
+    row = CreateFrame("Button", nil, planner.timelineList.content)
+    row.background = ns:Fill(row, { 1, 1, 1, 0 })
+    row.time = ns:Text(row, 10, theme.dim)
+    row.time:SetPoint("LEFT", 4, 0)
+    row.time:SetWidth(34)
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.label = ns:Text(row, 11)
+    row.label:SetPoint("RIGHT", -46, 0)
+    row.play = ns:Button(row, "Play", 38, 16, function()
+        local specKey, diffSlug, boss = Selected()
+        ns:StartTest(specKey, diffSlug, boss, nil, math.max(0, row.at - 5))
+    end)
+    row.play:SetPoint("RIGHT", -2, 0)
+    row.play.label:SetFont(ns:GetFont(), 9, "")
+    ns:Tooltip(row.play, "Replay from here", "Replays the recorded pull from 5 seconds before this, with your plan.")
+    row:SetScript("OnClick", function(self)
+        if self.cast then
+            OpenCast(self.cast)
+        end
+    end)
+    row:SetScript("OnEnter", function(self)
+        if self.cast then
+            self.background:SetColorTexture(1, 1, 1, 0.06)
+        end
+    end)
+    row:SetScript("OnLeave", function(self) self:Paint() end)
+    ns:Tooltip(row, function(tooltip, self)
+        if not self.cast then
+            return false
+        end
+        tooltip:SetText(self.cast.name .. (self.cast.count and (" (" .. self.cast.count .. ")") or ""), 1, 1, 1)
+        tooltip:AddLine("Goes off at " .. ns:FormatTime(self.cast.at), 0.7, 0.7, 0.7)
+        tooltip:AddLine(self.cast.assigned and "Click to see its assignments" or "Click to assign something to it", Accent())
+    end)
+    function row:Paint()
+        local r, g, b = ns:GetAccent()
+        if self.current then
+            self.background:SetColorTexture(r, g, b, 0.22)
+        elseif self.kind == 'stage' then
+            self.background:SetColorTexture(r, g, b, 0.1)
+        else
+            self.background:SetColorTexture(1, 1, 1, 0)
+        end
+    end
+    planner.timelineRows[index] = row
+    return row
+end
+
+local function BuildTimelineTab(panel)
+    local tab = CreateFrame("Frame", nil, panel)
+    tab:SetAllPoints()
+    planner.timelineTab = tab
+    planner.timelineInfo = ns:Text(tab, 11, theme.dim)
+    planner.timelineInfo:SetPoint("TOPLEFT", 0, -4)
+    planner.timelineInfo:SetPoint("RIGHT", tab, "RIGHT", -180, 0)
+    planner.timelineAssigned = ns:Checkbox(tab, "Only assigned abilities", function() return UI().timelineAssigned end, function(value)
+        UI().timelineAssigned = value or nil
+        Refresh()
+    end)
+    planner.timelineAssigned:SetWidth(170)
+    planner.timelineAssigned:SetPoint("TOPRIGHT", 0, 0)
+    local legend = ns:Text(tab, 10, theme.dim)
+    legend:SetPoint("TOPLEFT", 0, -24)
+    legend:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
+    legend:SetText("Boss abilities in white, your reminders in green. Click an ability to assign to it, Play replays from there.")
+    local well = CreateFrame("Frame", nil, tab)
+    well:SetPoint("TOPLEFT", 0, -44)
+    well:SetPoint("BOTTOMRIGHT", 0, 0)
+    ns:Fill(well, theme.well)
+    ns:Border(well, theme.border)
+    planner.timelineList = ns:ScrollList(well)
+    planner.timelineList:SetPoint("TOPLEFT", 1, -1)
+    planner.timelineList:SetPoint("BOTTOMRIGHT", -1, 1)
+    planner.timelineRows = {}
+    planner.timelineEmpty = ns:Text(well, 12, theme.dim)
+    planner.timelineEmpty:SetPoint("TOPLEFT", 12, -12)
+    planner.timelineEmpty:SetPoint("RIGHT", well, "RIGHT", -12, 0)
+    planner.timelineEmpty:SetWordWrap(true)
+end
+
+--The lines of the timeline in order: stage changes, boss casts and reminders. At the same time a stage comes first, then
+--reminders, then the cast they lead up to
+local function TimelineLines(timeline, boss)
+    local lines = {}
+    for _, stage in ipairs(timeline.stages) do
+        if stage.at > 0 or stage.stage ~= '1' then
+            table.insert(lines, { kind = 'stage', at = stage.at, order = 0, text = ScopeText(boss, stage.stage) or ("Stage " .. stage.stage) })
+        end
+    end
+    for _, cast in ipairs(timeline.casts) do
+        if cast.assigned or not UI().timelineAssigned then
+            table.insert(lines, { kind = 'cast', at = cast.at, order = 2, cast = cast })
+        end
+    end
+    for _, reminder in ipairs(timeline.reminders) do
+        table.insert(lines, { kind = 'reminder', at = reminder.at, order = 1, reminder = reminder })
+    end
+    table.sort(lines, function(a, b)
+        if math.abs(a.at - b.at) > 0.05 then
+            return a.at < b.at
+        end
+        return a.order < b.order
+    end)
+    return lines
+end
+
+local function RefreshTimeline()
+    local specKey, diffSlug, boss = Selected()
+    local record = ns:GetRecording(boss, diffSlug)
+    for _, row in ipairs(planner.timelineRows) do
+        row:Hide()
+    end
+    planner.timelineLines = nil
+    if not record then
+        planner.timelineInfo:SetText("No recorded pull")
+        planner.timelineEmpty:SetText("No pull of " .. ns.bosses[boss].name .. " on " .. ns.difficulties[UI().difficulty].name ..
+            " recorded yet. Pull it once with BigWigs or DBM, and the timeline shows when each ability went off and when your reminders show.")
+        planner.timelineEmpty:Show()
+        planner.timelineList:SetContentHeight(1)
+        return
+    end
+    planner.timelineEmpty:Hide()
+    planner.timelineInfo:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date)
+    local timeline = ns:BuildTimeline(specKey, GetPlanText(), record, boss)
+    local lines = TimelineLines(timeline, boss)
+    local r, g, b = ns:GetAccent()
+    local y = 0
+    for index, line in ipairs(lines) do
+        local row = TimelineRow(index)
+        row.kind, row.at, row.cast, row.current = line.kind, line.at, line.cast, false
+        local height = TIMELINE_ROW[line.kind]
+        row:SetHeight(height)
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, y)
+        row:SetPoint("RIGHT", planner.timelineList.content, "RIGHT", 0, 0)
+        line.y = y
+        row.time:SetText(ns:FormatTime(line.at))
+        row.icon:ClearAllPoints()
+        row.label:ClearAllPoints()
+        row.label:SetPoint("RIGHT", -46, 0)
+        row.play:SetShown(line.kind ~= 'reminder')
+        if line.kind == 'stage' then
+            row.icon:Hide()
+            row.label:SetPoint("LEFT", row.time, "RIGHT", 6, 0)
+            row.label:SetText(line.text:upper())
+            row.label:SetTextColor(r, g, b, 1)
+            row.time:SetTextColor(r, g, b, 1)
+        elseif line.kind == 'cast' then
+            local cast = line.cast
+            local _, icon = SpellNameAndIcon(cast.spellId, cast.name)
+            row.icon:SetSize(16, 16)
+            row.icon:SetPoint("LEFT", row.time, "RIGHT", 6, 0)
+            row.icon:SetTexture(icon)
+            row.icon:Show()
+            row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+            row.label:SetText(cast.name .. (cast.count and (" (" .. cast.count .. ")") or ""))
+            row.label:SetTextColor(1, 1, 1, cast.assigned and 1 or 0.6)
+            row.time:SetTextColor(1, 1, 1, 0.53)
+        else
+            local reminder = line.reminder
+            row.icon:SetSize(14, 14)
+            row.icon:SetPoint("LEFT", row.time, "RIGHT", 18, 0)
+            row.icon:SetTexture(reminder.icon or QUESTION_MARK)
+            row.icon:Show()
+            row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+            row.label:SetText((reminder.approximate and "~ " or "") .. reminder.text)
+            row.label:SetTextColor(r, g, b, 0.9)
+            row.time:SetTextColor(r, g, b, 0.7)
+        end
+        row:Paint()
+        row:Show()
+        y = y - height
+    end
+    planner.timelineLines = lines
+    planner.timelineList:SetContentHeight(-y + 4)
+end
+
+--While a replay runs, the line it has reached is lit and kept in view
+local function UpdatePlayhead()
+    local lines = planner.timelineLines
+    if not lines or not planner.timelineTab:IsShown() then
+        return
+    end
+    local now = ns:IsTesting() and not ns.fight.test.ability and (GetTime() - ns.fight.start) or nil
+    local current
+    for index, line in ipairs(lines) do
+        if now and line.at <= now then
+            current = index
+        end
+    end
+    for index, row in ipairs(planner.timelineRows) do
+        if row:IsShown() then
+            row.current = index == current
+            row:Paint()
+        end
+    end
+    if current then
+        local list = planner.timelineList
+        local top = -lines[current].y
+        local visible = list:GetHeight() or 0
+        local scroll = list:GetVerticalScroll() or 0
+        if top < scroll or top > scroll + visible - 40 then
+            list:SetVerticalScroll(math.max(0, math.min(top - visible / 3, list:GetVerticalScrollRange() or 0)))
+        end
+    end
+end
+
+------------------------------------------------------------------------------------------------------------------------
 -- Right: plan text and MRT note
 ------------------------------------------------------------------------------------------------------------------------
 
@@ -1034,7 +1326,8 @@ local function BuildNoteTab(panel)
     planner.noteStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
 end
 
-local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "MRT note" } }
+local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "MRT note" },
+    { key = 'timeline', text = "Timeline" } }
 
 local function BuildRight(page)
     local right = Column(page, RIGHT_X, RIGHT_W)
@@ -1042,7 +1335,7 @@ local function BuildRight(page)
     local x = 0
     for _, info in ipairs(TABS) do
         local button = CreateFrame("Button", nil, right)
-        button:SetSize(100, 24)
+        button:SetSize(96, 24)
         button:SetPoint("TOPLEFT", x, 0)
         button.label = ns:Text(button, 12, theme.text, "LEFT")
         button.label:SetPoint("LEFT", 0, 2)
@@ -1057,7 +1350,7 @@ local function BuildRight(page)
         end)
         button.key = info.key
         planner.tabButtons[info.key] = button
-        x = x + 110
+        x = x + 106
     end
     local panel = CreateFrame("Frame", nil, right)
     panel:SetPoint("TOPLEFT", 0, -36)
@@ -1065,6 +1358,7 @@ local function BuildRight(page)
     BuildAssignmentsTab(panel)
     BuildPlanTextTab(panel)
     BuildNoteTab(panel)
+    BuildTimelineTab(panel)
 end
 
 local function RefreshAssignments(line, keepRows)
@@ -1170,17 +1464,15 @@ function Refresh(keepRows)
     local planText = GetPlanText()
     planner.specButton:Refresh()
     planner.difficulty:Refresh()
-    for encounterId, row in pairs(planner.bossRows) do
-        row:SetSelected(encounterId == boss)
-    end
+    RefreshBosses(boss)
     RefreshTest()
 
-    local lines = AbilityListLines(boss, ns:GetPlannerAbilities(boss, planText), planText)
+    local lines = AbilityListLines(boss, ns:GetPlannerAbilities(boss, planText, UI().difficulty == 15), planText)
     local selected = SelectedLine(lines)
     RefreshAbilities(lines, selected, planText)
 
     local tab = UI().plannerTab
-    if tab ~= 'plan' and tab ~= 'note' then
+    if tab ~= 'plan' and tab ~= 'note' and tab ~= 'timeline' then
         tab = 'assignments'
     end
     for key, button in pairs(planner.tabButtons) do
@@ -1191,7 +1483,11 @@ function Refresh(keepRows)
     planner.assignmentsTab:SetShown(tab == 'assignments')
     planner.planTextTab:SetShown(tab == 'plan')
     planner.noteTab:SetShown(tab == 'note')
-    if tab == 'plan' then
+    planner.timelineTab:SetShown(tab == 'timeline')
+    if tab == 'timeline' then
+        RefreshTimeline()
+        UpdatePlayhead()
+    elseif tab == 'plan' then
         if not planner.planBox:HasFocus() then
             planner.planBox:SetText(planText)
             planner.planStatus:SetText(ns.specNames[specKey] .. ", " .. ns.difficulties[UI().difficulty].name .. " " .. ns.bosses[boss].name)
@@ -1211,7 +1507,10 @@ ns:RegisterPage('plans', "Plans", 1, function(page)
     BuildLeft(page)
     BuildMiddle(page)
     BuildRight(page)
-    ns:SetPageTestHandler('plans', RefreshTest)
+    ns:SetPageTestHandler('plans', function()
+        RefreshTest()
+        UpdatePlayhead()
+    end)
 end, function()
     Refresh()
 end)

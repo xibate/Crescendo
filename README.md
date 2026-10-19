@@ -1,6 +1,6 @@
 # Crescendo
 
-A World of Warcraft addon that reminds healers of every step of their raid ramps. Write a plan per boss with when each ramp or cooldown should land, and the addon shows and speaks the steps leading up to it. Built for Midnight (patch 12.1, The Venomous Abyss).
+A World of Warcraft addon that reminds healers of every step of their raid ramps. Write a plan per boss with when each ramp or cooldown should land, and the addon shows and speaks the steps leading up to it. Built for Midnight: The Venomous Abyss, The Unbinding of Kith'ix and the Midnight lair boss Nymrissa Wavecaller, plus the season 1 raids (The Voidspire, The Dreamrift, March on Quel'Danas).
 
 ## Installing
 
@@ -14,15 +14,15 @@ Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelp
 
 ### Plans
 
-1. On the left, pick your spec, the difficulty and the boss.
+1. On the left, pick your spec, the difficulty and the boss. Bosses are listed under their raid; click a raid's name to fold it away (the season 1 raids start folded).
 2. In the middle, pick one of the boss's abilities. For bosses with stages, choose how they are listed:
    - **By stage**: each stage with the abilities that happen in it. An ability that comes back in a later stage, like Spectral Coils in Ula'tek's intermission, is listed under every stage it happens in. What you assign there only triggers in that stage.
    - **All stages**: every ability once. What you assign there triggers in every stage.
 
-   Hover an ability for its spell tooltip, the stages it happens in and what is assigned to it. The number next to it is how many assignments trigger there. Abilities without a stage, and ones your boss mod showed bars for or only named in the plan, are listed under Any stage.
+   Click a stage's or group's name to fold it away. On Heroic, abilities that are only on Mythic are left out. Hover an ability for its spell tooltip, the stages it happens in and what is assigned to it. The number next to it is how many assignments trigger there. Abilities without a stage, and ones your boss mod showed bars for or only named in the plan, are listed under Any stage.
 3. On the right, click **+ Add assignment** and pick what to cast: one of your ramps, cooldowns or equipped on-use trinkets, or type any spell or item. Each assignment reads like a sentence: *what* lands *3* sec before *every cast*.
    - Use **-** and **+** (or type a number) for how many seconds before the ability the ramp lands (its last step) or the spell is cast.
-   - Pick which casts: every cast, every other cast, every other from the 2nd, every 3rd, or **Only some casts...** to list casts like `2,4` or write a pattern like `every 3 from 2`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
+   - Pick which casts, shown by their numbers: all casts, odd casts (1, 3, 5...), even casts (2, 4, 6...), every 3rd from the 1st, 2nd or 3rd, only the 1st, or **Pick casts...** to list casts like `2,4` or write a pattern like `every 4 from 2`. BigWigs and DBM number each cast of an ability on their bars, like `Spectral Coils (2)`.
 
    The line under an assignment says when its first message shows. A ramp's first message comes as far ahead of its landing as its steps say (for Evangelism, its setup step 6 global cooldowns before), a spell's countdown as long as the Spell countdown on the Display page. Hover the line for every message and its time.
 
@@ -30,11 +30,11 @@ Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5
 
 ### Testing
 
-Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. **Replay pull** runs the longest recorded pull of the selected boss and difficulty again with your current plan, so its reminders show and speak as they would in the raid, anywhere, also while hitting a target dummy. **Test cast** on the Assignments tab pretends a cast of the selected ability is coming in a number of seconds, which works without a recorded pull.
+Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. The **Timeline** tab shows the longest recorded pull of the selected boss and difficulty at once: when each stage started, when each ability went off and when your reminders would show with your current plan. Click an ability there to assign something to it. **Play** on a line, or **Replay pull**, runs the pull again from there with your plan, so its reminders show and speak as they would in the raid, anywhere, also while hitting a target dummy, and the timeline follows along. **Test cast** on the Assignments tab pretends a cast of the selected ability is coming in a number of seconds, which works without a recorded pull.
 
 ### Ramps and Display
 
-The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show. **Unlock** (or `/cres unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, the reminder options and reading MRT notes.
+The Ramps page edits the ramps of each spec, see below. The Display page sets where and how big the reminders show, and whether plans are saved for all characters or for this character only (it starts with a copy of the plans for all characters). **Unlock** (or `/cres unlock`) works like EllesmereUI's unlock mode: the screen dims under a grid and the reminders show with a box to drag them, and a toolbar has the exact position, nudge buttons, snap to grid and Lock. Escape or entering combat locks them too. The page also sets the voice, the reminder options and reading MRT notes.
 
 **Hide reminders while the spell or trinket is on cooldown** leaves out the reminders of a ramp, spell or trinket that won't be ready by the time it should land. A ramp goes by the spell set for it on the Ramps page. During boss fights the game can hide cooldowns from addons; then the addon goes by your last cast of the spell and the cooldown it saw when it could read it, and when it can't tell, the reminder shows.
 
@@ -100,7 +100,8 @@ Addons can't read the combat log any more, and spell charges and haste can be se
 
 | Folder | Contents |
 | --- | --- |
-| [Config](Config/) | `Bosses.lua` raid bosses and difficulties, `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities and stages, from BigWigs |
-| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `Cooldowns.lua` whether a spell or trinket is ready, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
+| [Config](Config/) | `Bosses.lua` raids, bosses and difficulties (generated from BigWigs), `Specs.lua` the healer specs, their starter ramps and cooldowns, `Abilities.lua` each boss's abilities and stages, from BigWigs |
+| [Core](Core/) | `Database.lua` saved settings, `Ramps.lua` the ramp format and reminder steps, `Trinkets.lua` trinkets in plans, `PlanText.lua` the plan format and MRT notes, `Plan.lua` building a fight's reminders, `Fight.lua` the fight timer and phases, `Cooldowns.lua` whether a spell or trinket is ready, `BossMods.lua` BigWigs and DBM stages and bars, `Test.lua` recording pulls and tests, `Timeline.lua` what happens in a recorded pull, `Spec.lua` the player's spec and haste, `Util.lua` small helpers |
 | [UI](UI/) | `Display.lua` the on-screen reminders, styled like the window, and text to speech, `Theme.lua` the EllesmereUI style colours and widgets, `Window.lua` the window and `/cres`, `Planner.lua` the Plans page, `RampsPage.lua` and `DisplayPage.lua` the other pages, `Unlock.lua` moving the reminders |
 | `main.lua` | Starts and stops the fight on encounter events |
+| [tools](tools/) | `gen_bosses.py` regenerates `Config/Bosses.lua` and `Config/Abilities.lua` from a BigWigs checkout, not part of the addon |

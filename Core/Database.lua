@@ -4,7 +4,8 @@ local DATABASE_VERSION = 3
 
 --Saved settings:
 -- options        display, text to speech and MRT note settings
--- plans          plans[spec][difficulty slug][encounter id] = plan text, see Core/PlanText.lua
+-- plans          plans[spec][difficulty slug][encounter id] = plan text, see Core/PlanText.lua. A character can keep its
+--                own plans in CrescendoCharacterDB.plans instead, with CrescendoCharacterDB.perCharacter set
 -- testPlans      testPlans[spec] = plan text of the old testing mode, no longer used
 -- ramps          ramps[spec][ramp name] = { spellId = spell MRT notes use, steps = steps text, see Core/Ramps.lua }
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
@@ -204,6 +205,13 @@ function ns:InitDatabase()
     end
     db.version = DATABASE_VERSION
     ns.db = db
+    if type(CrescendoCharacterDB) ~= 'table' then
+        CrescendoCharacterDB = {}
+    end
+    if type(CrescendoCharacterDB.plans) ~= 'table' then
+        CrescendoCharacterDB.plans = {}
+    end
+    ns.characterDb = CrescendoCharacterDB
 end
 
 --Puts the display, text to speech and MRT note options back to their defaults
@@ -213,12 +221,33 @@ function ns:ResetOptions()
     end
 end
 
+--Plans are saved for all characters, or for each character on its own when the character chose that
+local function Plans()
+    if ns.characterDb.perCharacter then
+        return ns.characterDb.plans
+    end
+    return ns.db.plans
+end
+
+function ns:ArePlansPerCharacter()
+    return ns.characterDb.perCharacter == true
+end
+
+--Saves this character's plans on their own, or with all characters again. A character that starts saving its own plans
+--starts with a copy of the plans for all characters
+function ns:SetPlansPerCharacter(perCharacter)
+    if perCharacter and next(ns.characterDb.plans) == nil then
+        ns.characterDb.plans = Copy(ns.db.plans)
+    end
+    ns.characterDb.perCharacter = perCharacter or nil
+end
+
 function ns:GetPlan(specKey, diffSlug, encounterId)
-    return Child(Child(ns.db.plans, specKey), diffSlug)[tostring(encounterId)] or ''
+    return Child(Child(Plans(), specKey), diffSlug)[tostring(encounterId)] or ''
 end
 
 function ns:SetPlan(specKey, diffSlug, encounterId, text)
-    Child(Child(ns.db.plans, specKey), diffSlug)[tostring(encounterId)] = text
+    Child(Child(Plans(), specKey), diffSlug)[tostring(encounterId)] = text
 end
 
 --Ramps of a spec, by name: { spellId, steps }

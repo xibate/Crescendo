@@ -1,10 +1,11 @@
 ## Interface: 120100, 120105
-## Version: 3.0.0
+## Version: 3.1.0
 ## Title: Crescendo
 ## IconTexture: Interface/Addons/Crescendo/Media/logo
 ## Notes: Plans and reminders for healer ramps and cooldowns in raid
 ## Author: Zynx
 ## SavedVariables: CrescendoDB, ZynxRampHelperDB
+## SavedVariablesPerCharacter: CrescendoCharacterDB
 ## OptionalDeps: BigWigs, DBM-Core, EllesmereUI
 ## AddonCompartmentFunc: Crescendo_OnAddonCompartmentClick
 
@@ -23,6 +24,7 @@ Core\Fight.lua
 Core\Cooldowns.lua
 Core\BossMods.lua
 Core\Test.lua
+Core\Timeline.lua
 
 UI\Theme.lua
 UI\Display.lua

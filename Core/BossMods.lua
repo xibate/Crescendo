@@ -65,6 +65,15 @@ local function SplitBarText(text)
     return text, nil
 end
 
+function ns:SplitBarText(text)
+    return SplitBarText(text)
+end
+
+--True when an ability line (resolved with ns:ResolveAnchor) is for the ability a bar shows
+function ns:AnchorMatchesAbility(anchor, name, spellId)
+    return (spellId and anchor.spellIds[spellId]) or anchor.names[name:lower()] or false
+end
+
 --Remembers the abilities the boss mods showed bars for, so the planner can list them for that boss
 local function RememberAbility(name, spellId)
     local encounterId = ns.fight.encounterId
@@ -103,7 +112,7 @@ end
 local function MatchingAnchors(name, spellId, count)
     local matches = {}
     for _, anchor in ipairs(ns.abilityAnchors) do
-        local sameAbility = (spellId and anchor.spellIds[spellId]) or anchor.names[name:lower()]
+        local sameAbility = ns:AnchorMatchesAbility(anchor, name, spellId)
         if sameAbility and ns:AnchorMatchesCast(anchor, count) and ns:AnchorMatchesPhase(anchor, ns.fight.phase or '1') then
             table.insert(matches, anchor)
         end

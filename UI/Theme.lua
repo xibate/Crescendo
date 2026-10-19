@@ -233,6 +233,7 @@ function ns:OpenMenu(anchor, items, onSelect)
         table.insert(UISpecialFrames, "CrescendoMenu")
     end
     local width = math.max(anchor:GetWidth() or 180, 180)
+    local widest = 0
     for _, row in ipairs(menu.rows) do
         row:Hide()
     end
@@ -267,6 +268,7 @@ function ns:OpenMenu(anchor, items, onSelect)
         end
         row.label:SetPoint("RIGHT", -8, 0)
         row.label:SetText(item.header and item.text:upper() or item.text)
+        widest = math.max(widest, (row.label:GetStringWidth() or 0) + (item.icon and 30 or 0) + 24)
         if item.header then
             row.label:SetTextColor(Color(theme.section))
             row:SetScript("OnClick", nil)
@@ -280,7 +282,7 @@ function ns:OpenMenu(anchor, items, onSelect)
         row:Show()
         y = y - 22
     end
-    menu:SetSize(width, -y + 4)
+    menu:SetSize(math.max(width, widest), -y + 4)
     menu:ClearAllPoints()
     menu:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -2)
     menu.owner = anchor
@@ -623,4 +625,36 @@ function ns:TextArea(parent, onChange)
     well:SetScript("OnMouseDown", function() box:SetFocus() end)
     well.box = box
     return well
+end
+
+--A section heading that folds the rows under it away when clicked, with + or - in front. SetFolded shows which it is
+function ns:FoldHeader(parent, height)
+    local header = CreateFrame("Button", nil, parent)
+    header:SetHeight(height or 22)
+    header.background = ns:Fill(header, { 1, 1, 1, 0 })
+    header.sign = ns:Text(header, 12, theme.section, "CENTER")
+    header.sign:SetPoint("LEFT", 4, 0)
+    header.sign:SetWidth(12)
+    header.label = ns:Text(header, 10, theme.section)
+    header.label:SetPoint("LEFT", 20, 0)
+    header.label:SetPoint("RIGHT", -6, 0)
+    local function Paint(hover)
+        header.background:SetColorTexture(1, 1, 1, hover and 0.05 or 0)
+        local alpha = hover and 0.85 or (header.highlighted and 0.75 or theme.section[4])
+        header.label:SetTextColor(1, 1, 1, alpha)
+        header.sign:SetTextColor(1, 1, 1, alpha)
+    end
+    header:SetScript("OnEnter", function() Paint(true) end)
+    header:SetScript("OnLeave", function() Paint(false) end)
+    function header:SetFolded(folded)
+        self.folded = folded
+        self.sign:SetText(folded and "+" or "-")
+    end
+    --A folded section with the selection in it is a little brighter, so the selection can be found
+    function header:SetHighlighted(highlighted)
+        self.highlighted = highlighted
+        Paint(false)
+    end
+    header:SetFolded(false)
+    return header
 end
