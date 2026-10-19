@@ -1778,7 +1778,7 @@ ns.plannerKit = {
     Selected = Selected, GetPlanText = GetPlanText, SpellNameAndIcon = SpellNameAndIcon, AbilityKey = AbilityKey,
     StageName = StageName, ShortStageName = ShortStageName, HasStages = HasStages, IsIntermission = IsIntermission,
     NewCardList = NewCardList, FillCards = FillCards, ResetCards = ResetCards, OpenEntryMenu = OpenEntryMenu,
-    ConflictTooltip = ConflictTooltip, CastsText = CastsText, EntryIcon = EntryIcon, TimingText = TimingText, FindAbility = FindAbility,
+    ConflictTooltip = ConflictTooltip, AbilityTooltip = AbilityTooltip, CastsText = CastsText, EntryIcon = EntryIcon, TimingText = TimingText, FindAbility = FindAbility,
     SelectAbility = SelectAbility, CARD_H = CARD_H, QUESTION_MARK = QUESTION_MARK
 }
 

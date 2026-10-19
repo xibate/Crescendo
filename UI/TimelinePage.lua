@@ -279,6 +279,24 @@ local function Lane(index)
     lane.label = ns:Text(lane, 11)
     lane.label:SetPoint("LEFT", lane.icon, "RIGHT", 7, 0)
     lane.label:SetWidth(NAME_W - 40)
+    --The ability's name: the same tooltip as in the Plans page's list, and a click selects its first cast
+    lane.name = CreateFrame("Button", nil, lane)
+    lane.name:SetPoint("TOPLEFT")
+    lane.name:SetPoint("BOTTOMLEFT")
+    lane.name:SetWidth(NAME_W - 6)
+    lane.name:SetScript("OnEnter", function() lane.label:SetTextColor(1, 1, 1, 1) end)
+    lane.name:SetScript("OnLeave", function() lane.label:SetTextColor(1, 1, 1, lane.selected and 1 or 0.75) end)
+    lane.name:SetScript("OnClick", function()
+        if lane.info and lane.info.casts[1] then
+            SelectCast(lane.info.casts[1])
+        end
+    end)
+    ns:Tooltip(lane.name, function(tooltip)
+        if not lane.info then
+            return false
+        end
+        kit.AbilityTooltip(tooltip, { ability = lane.info.ability })
+    end)
     local rule = lane:CreateTexture(nil, "BORDER")
     rule:SetHeight(1)
     rule:SetPoint("BOTTOMLEFT")
@@ -599,6 +617,7 @@ local function DrawLanes(lanes, selected)
         lane.label:SetText(name)
         lane.icon:SetTexture(icon)
         local isSelected = selected and selected.lane == info
+        lane.info, lane.selected = info, isSelected
         lane.background:SetColorTexture(1, 1, 1, isSelected and 0.04 or 0)
         lane.label:SetTextColor(1, 1, 1, isSelected and 1 or 0.75)
         lane:Show()
