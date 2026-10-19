@@ -42,7 +42,7 @@ function ns:CheckPlanForPull(specKey, diffSlug, encounterId)
             end
         end
     end
-    local record = ns:GetRecording(encounterId, diffSlug)
+    local record = ns:GetRecordingFor(encounterId, diffSlug)
     if record then
         local conflicts = ns:BuildTimeline(specKey, text, record, encounterId).conflicts
         if conflicts > 0 then

@@ -4,9 +4,11 @@ local _, ns = ...
 --  ##crescendo 1
 --  ##spec Discipline
 --  ##plan 3492 myth Ula'tek          a plan, its lines follow
+--  ##pull 3492 myth 272 2026-10-19   a recorded pull of the boss, its events follow (see ns:RecordingLines)
 --  ##ramp 472433 Evangelism          a ramp the plans use, its steps follow (0 when it has no spell id)
 --  ##end
---Importing replaces the plans for those bosses, and adds the ramps the player doesn't have yet
+--Importing replaces the plans for those bosses, adds the ramps the player doesn't have yet, and keeps a shared pull when
+--the player has no recorded pull of that boss and difficulty or a shorter one
 
 local HEADER = '##crescendo 1'
 
@@ -22,11 +24,21 @@ local function TextLines(text)
     return lines
 end
 
---A share string of a spec's plans, { encounterId, diffSlug } each, with the ramps they use. Nil when the plans are empty
-function ns:ExportPlans(specKey, plans)
+--A share string of a spec's plans, { encounterId, diffSlug } each, with the ramps they use, and with withPulls the
+--recorded pulls of those bosses too. Returns the string, how many plans and how many pulls are in it; nil when there are
+--neither
+function ns:ExportPlans(specKey, plans, withPulls)
     local lines = { HEADER, '##spec ' .. specKey }
-    local ramps, rampOrder, count = {}, {}, 0
+    local ramps, rampOrder, count, pulls = {}, {}, 0, 0
     for _, which in ipairs(plans) do
+        local record = withPulls and ns:GetRecording(which.encounterId, which.diffSlug)
+        if record then
+            pulls = pulls + 1
+            table.insert(lines, '##pull ' .. which.encounterId .. ' ' .. which.diffSlug .. ' ' .. record.duration .. ' ' .. (record.date or ''))
+            for _, line in ipairs(ns:RecordingLines(record)) do
+                table.insert(lines, line)
+            end
+        end
         local text = ns:GetPlan(specKey, which.diffSlug, which.encounterId)
         if text:find('%S') then
             count = count + 1
@@ -49,8 +61,8 @@ function ns:ExportPlans(specKey, plans)
             end
         end
     end
-    if count == 0 then
-        return nil, 0
+    if count == 0 and pulls == 0 then
+        return nil, 0, 0
     end
     table.sort(rampOrder)
     for _, name in ipairs(rampOrder) do
@@ -62,18 +74,20 @@ function ns:ExportPlans(specKey, plans)
         end
     end
     table.insert(lines, '##end')
-    return table.concat(lines, '\n'), count
+    return table.concat(lines, '\n'), count, pulls
 end
 
---Reads a share string into { specKey, plans = { encounterId, diffSlug, text }, ramps = { name, spellId, steps } }, or nil
---and what is wrong with it
+--Reads a share string into { specKey, plans = { encounterId, diffSlug, text }, ramps = { name, spellId, steps },
+--pulls = { encounterId, diffSlug, record } }, or nil and what is wrong with it
 function ns:ReadPlanString(text)
-    local data = { plans = {}, ramps = {} }
+    local data = { plans = {}, ramps = {}, pulls = {} }
     local current, started
     local function Finish()
         if current then
             current.body = table.concat(current.lines, '\n')
-            current.lines = nil
+            if not current.pull then
+                current.lines = nil
+            end
         end
         current = nil
     end
@@ -96,6 +110,14 @@ function ns:ReadPlanString(text)
                 end
                 current = { encounterId = tonumber(encounterId), diffSlug = diffSlug, lines = {} }
                 table.insert(data.plans, current)
+            elseif command == 'pull' then
+                Finish()
+                local encounterId, diffSlug, duration, day = rest:match('^(%d+)%s+(%a+)%s+([%d.]+)%s*(%S*)')
+                if not encounterId then
+                    return nil, "'" .. line .. "' doesn't say which boss, difficulty and length"
+                end
+                current = { pull = true, encounterId = tonumber(encounterId), diffSlug = diffSlug, duration = duration, date = day, lines = {} }
+                table.insert(data.pulls, current)
             elseif command == 'ramp' then
                 Finish()
                 local spellId, name = rest:match('^(%d+)%s+(.+)$')
@@ -119,15 +141,28 @@ function ns:ReadPlanString(text)
     if not ns.specNames[data.specKey or ''] then
         return nil, "The string is for a spec this addon doesn't know: " .. tostring(data.specKey)
     end
-    if #data.plans == 0 then
+    if #data.plans == 0 and #data.pulls == 0 then
         return nil, "The string has no plans in it"
     end
-    for _, plan in ipairs(data.plans) do
+    local function Known(which)
         local isDifficulty = false
         for _, difficulty in pairs(ns.difficulties) do
-            isDifficulty = isDifficulty or difficulty.slug == plan.diffSlug
+            isDifficulty = isDifficulty or difficulty.slug == which.diffSlug
         end
-        if not ns.bosses[plan.encounterId] or not isDifficulty then
+        return ns.bosses[which.encounterId] and isDifficulty
+    end
+    for _, pull in ipairs(data.pulls) do
+        if not Known(pull) then
+            return nil, "The string has a pull of a boss or difficulty this version doesn't have (" .. pull.encounterId .. " " .. pull.diffSlug .. ")"
+        end
+        pull.record = ns:ReadRecordingLines(pull.lines, pull.duration, pull.date)
+        pull.lines = nil
+        if not pull.record then
+            return nil, "The recorded pull of " .. ns.bosses[pull.encounterId].name .. " can't be read"
+        end
+    end
+    for _, plan in ipairs(data.plans) do
+        if not Known(plan) then
             return nil, "The string has a plan for a boss or difficulty this version doesn't have (" .. plan.encounterId .. " " .. plan.diffSlug .. ")"
         end
         local check = ns:CheckPlan(plan.body)
@@ -163,6 +198,9 @@ function ns:DescribePlanImport(data)
         table.insert(plans, ns.bosses[plan.encounterId].name .. " (" .. DifficultyName(plan.diffSlug) .. replaces .. ")")
     end
     local text = #data.plans .. (#data.plans == 1 and " plan" or " plans") .. " for " .. ns.specNames[data.specKey] .. ": " .. table.concat(plans, ", ")
+    if #data.plans == 0 then
+        text = "No plans"
+    end
     local added, kept = {}, {}
     for _, ramp in ipairs(data.ramps) do
         local own = ns:FindRamp(data.specKey, ramp.name)
@@ -178,6 +216,22 @@ function ns:DescribePlanImport(data)
     if #kept > 0 then
         text = text .. ". Keeps your own " .. table.concat(kept, ", ")
     end
+    local newPulls, longer = {}, {}
+    for _, pull in ipairs(data.pulls) do
+        local mine = ns:GetRecording(pull.encounterId, pull.diffSlug)
+        local name = ns.bosses[pull.encounterId].name .. " (" .. DifficultyName(pull.diffSlug) .. ", " .. ns:FormatTime(pull.record.duration) .. ")"
+        if not mine or mine.duration < pull.record.duration then
+            table.insert(newPulls, name)
+        else
+            table.insert(longer, ns.bosses[pull.encounterId].name)
+        end
+    end
+    if #newPulls > 0 then
+        text = text .. ". Adds the recorded " .. (#newPulls == 1 and "pull" or "pulls") .. " of " .. table.concat(newPulls, ", ")
+    end
+    if #longer > 0 then
+        text = text .. ". Keeps your own longer pull of " .. table.concat(longer, ", ")
+    end
     return text
 end
 
@@ -191,5 +245,8 @@ function ns:ImportPlans(data)
         if not ns:FindRamp(data.specKey, ramp.name) then
             ns:GetRamps(data.specKey)[ramp.name] = { spellId = ramp.spellId, steps = ramp.steps }
         end
+    end
+    for _, pull in ipairs(data.pulls or {}) do
+        ns:StoreSharedRecording(pull.encounterId, pull.diffSlug, pull.record)
     end
 end

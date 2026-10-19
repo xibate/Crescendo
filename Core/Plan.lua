@@ -12,13 +12,13 @@ function ns:ShouldUseStep(step)
 end
 
 --A reminder of a step: entry is the ramp or spell it is for, press is true for the step at the ramp's or spell's time,
---and countFrom is where a spoken countdown to the press starts (see ns:CountdownStart)
-function ns:CreateReminder(step, at, entry, countFrom)
+--and countNumbers are the numbers a spoken countdown to the press says (see ns:CountdownNumbers)
+function ns:CreateReminder(step, at, entry, countNumbers)
     return {
         at = at,
         entry = entry,
         press = (step.offset or 0) == 0 and not step.chargesOf,
-        countFrom = countFrom,
+        countNumbers = countNumbers,
         text = step.text,
         icon = step.icon,
         tts = step.tts,
@@ -68,10 +68,10 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
         return ns.steps[entry]
     end
 
-    local countFrom = {}
-    local function CountFrom(entry)
-        countFrom[entry] = countFrom[entry] or ns:CountdownStart(StepsFor(entry) or {})
-        return countFrom[entry]
+    local countNumbers = {}
+    local function CountNumbers(entry)
+        countNumbers[entry] = countNumbers[entry] or ns:CountdownNumbers(StepsFor(entry) or {})
+        return countNumbers[entry]
     end
 
     local plan = ns:ParsePlan(planText)
@@ -82,7 +82,7 @@ function ns:BuildFightPlan(specKey, planText, readNotes, encounterId)
             local at = math.floor(timing.seconds - step.offset + 0.5)
             if at >= 0 and ns:ShouldUseStep(step) then
                 ns.plan[timing.phase] = ns.plan[timing.phase] or {}
-                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at, timing.entry, CountFrom(timing.entry)))
+                table.insert(ns.plan[timing.phase], ns:CreateReminder(step, at, timing.entry, CountNumbers(timing.entry)))
             end
         end
     end

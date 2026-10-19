@@ -158,11 +158,14 @@ local function BuildToolbar(frame)
             return
         end
         local specKey, diffSlug, boss = kit.Selected()
-        ns:StartTest(specKey, diffSlug, boss)
+        local from = page.cursor
+        page.cursor = nil
+        ns:StartTest(specKey, diffSlug, boss, nil, from)
     end, true)
     page.replay:SetPoint("TOPRIGHT", 0, 0)
     ns:Tooltip(page.replay, "Replay pull", "Runs the recorded pull again with your plan, so its reminders show and speak as they " ..
-        "would in the raid. Nothing has to be pulled, it works anywhere.")
+        "would in the raid. Nothing has to be pulled, it works anywhere. It starts where the line on the time bar is, when " ..
+        "you dragged it there.")
 end
 
 local function BuildChart(frame)
@@ -183,6 +186,11 @@ local function BuildChart(frame)
     ns:Fill(page.ticksRow, { 1, 1, 1, 0.02 })
     local timeName = ns:SectionLabel(page.ticksRow, "Time")
     timeName:SetPoint("LEFT", 10, 0)
+    page.ticksRow:EnableMouse(true)
+    page.ticksRow:SetScript("OnMouseDown", function() page.StartDrag() end)
+    page.ticksRow:SetScript("OnMouseUp", function() page.StopDrag() end)
+    ns:Tooltip(page.ticksRow, "Time bar", "Drag along it to move the line through the pull: Next up follows it, and Replay pull " ..
+        "starts there. While a replay runs, the replay jumps to where you let go.")
     local ruleTime = page.ticksRow:CreateTexture(nil, "ARTWORK")
     ruleTime:SetHeight(1)
     ruleTime:SetPoint("BOTTOMLEFT")
@@ -248,6 +256,7 @@ end
 
 local function SelectCast(cast)
     local _, _, boss = kit.Selected()
+    page.cursor = nil
     UI().timelineCast = { key = cast.lane.key, at = cast.at }
     --The Plans page shows the same ability, on the cast's stage
     kit.SelectAbility(cast.lane.ability, kit.HasStages(boss) and cast.stage or 'all')
@@ -646,7 +655,7 @@ local function RefreshNextUp()
     if not timeline or not page.duration then
         return
     end
-    local point = page.now or (page.selected and math.max(0, page.selected.at - 5)) or 0
+    local point = (page.dragging and page.cursor) or page.now or page.cursor or (page.selected and math.max(0, page.selected.at - 5)) or 0
     page.point = point
     page.nextLabel:SetText("NEXT UP AT " .. ns:FormatTime(point))
     local uses = {}
@@ -702,9 +711,15 @@ local function UpdatePlayhead()
     end
     local testing = ns:IsTesting() and not ns.fight.test.ability
     local now = testing and (GetTime() - ns.fight.start) or nil
-    if now and now >= 0 and now <= page.duration and page.chart:IsShown() then
+    if now and (now < 0 or now > page.duration) then
+        now = nil
+    end
+    page.now = now
+    --The line shows where it is dragged, else how far a replay is, else where it was dropped
+    local shown = (page.dragging and page.cursor) or now or page.cursor
+    if shown and page.chart:IsShown() then
         local r, g, b = ns:GetAccent()
-        local x = X(now)
+        local x = X(shown)
         page.playhead:SetColorTexture(r, g, b, 1)
         page.glow:SetColorTexture(r, g, b, 0.22)
         for _, line in ipairs({ page.playhead, page.glow }) do
@@ -714,23 +729,21 @@ local function UpdatePlayhead()
             line:Show()
         end
         page.bubble.fill:SetColorTexture(r, g, b, 1)
-        page.bubble.text:SetText(ns:FormatTime(now))
+        page.bubble.text:SetText(ns:FormatTime(shown))
         page.bubble:ClearAllPoints()
         page.bubble:SetPoint("TOP", page.chart, "TOPLEFT", x, -5)
         page.bubble:Show()
-        page.now = now
     else
         page.playhead:Hide()
         page.glow:Hide()
         page.bubble:Hide()
-        page.now = nil
     end
     RefreshNextUp()
 end
 
 local function UpdateReplayButtons()
     local testing = ns:IsTesting()
-    page.replay.label:SetText(testing and "Stop test" or "Replay pull")
+    page.replay.label:SetText(testing and "Stop test" or (page.cursor and ("Replay from " .. ns:FormatTime(page.cursor))) or "Replay pull")
     page.replayFrom.label:SetText(testing and "Stop test" or (page.selected and ("Replay from " ..
         ns:FormatTime(math.max(0, page.selected.at - 5))) or "Replay from here"))
 end
@@ -841,14 +854,61 @@ local function RefreshCast(cast, timeline, boss, planText, keepRows)
     end
 end
 
+--Where the cursor is on the time bar, as a time of the pull
+local function CursorTime()
+    local x = GetCursorPosition()
+    local scale = page.ticksRow:GetEffectiveScale() or 1
+    local left = page.ticksRow:GetLeft() or 0
+    local at = (x / scale - left - NAME_W) / TrackWidth() * page.duration
+    return math.max(0, math.min(page.duration, at))
+end
+
+--Dragging the line along the time bar. While a replay runs it jumps to where the line is let go, otherwise the line
+--stays there for Next up and Replay pull
+local function StartDrag()
+    if not page.duration then
+        return
+    end
+    page.dragging = true
+    page.cursor = CursorTime()
+    UpdatePlayhead()
+    page.ticksRow:SetScript("OnUpdate", function()
+        page.cursor = CursorTime()
+        UpdatePlayhead()
+    end)
+end
+
+local function StopDrag()
+    page.ticksRow:SetScript("OnUpdate", nil)
+    if not page.dragging then
+        return
+    end
+    page.dragging = false
+    page.cursor = CursorTime()
+    if ns:IsTesting() and not ns.fight.test.ability then
+        local specKey, diffSlug, boss = kit.Selected()
+        local from = page.cursor
+        page.cursor = nil
+        ns:StopTest()
+        ns:StartTest(specKey, diffSlug, boss, nil, from)
+    end
+    UpdatePlayhead()
+    UpdateReplayButtons()
+end
+
 function Refresh(keepRows)
     if not page then
         return
     end
     ns:RefreshBossBar()
     local specKey, diffSlug, boss = kit.Selected()
-    local record = ns:GetRecording(boss, diffSlug)
+    local record, recordSlug = ns:GetRecordingFor(boss, diffSlug)
     local planText = kit.GetPlanText()
+    --A dropped line belongs to the pull it was dropped on
+    local recordKey = record and (boss .. ':' .. recordSlug)
+    if recordKey ~= page.recordKey then
+        page.cursor, page.recordKey = nil, recordKey
+    end
     page.chart:SetShown(record ~= nil)
     page.panel:SetShown(record ~= nil)
     page.onlyAssigned:SetShown(record ~= nil)
@@ -860,8 +920,10 @@ function Refresh(keepRows)
         page.info:SetText("No recorded pull")
         page.empty:SetText("No pull of " .. ns.bosses[boss].name .. " on " .. ns.difficulties[UI().difficulty].name ..
             " recorded yet.\n\nPull it once with BigWigs or DBM: every pull is recorded, with the stages and the bars of " ..
-            "the boss's abilities. The timeline then shows when each ability went off, and you can assign to any cast " ..
-            "of it here.")
+            "the boss's abilities, a wipe too. The timeline then shows when each ability went off, and you can assign to " ..
+            "any cast of it here.\n\nNot pulled it yet? Someone who has can share it: Share on the Plans page, With " ..
+            "recorded pulls ticked, and Import the string they send. Boss mods only learn the timers in the fight, so " ..
+            "there is no way to know them before a first pull.")
         page.groups = nil
         UpdateReplayButtons()
         return
@@ -874,7 +936,16 @@ function Refresh(keepRows)
     page.middle:SetPoint("BOTTOMRIGHT", showNext and (-RIGHT_W - 18) or 0, 0)
     local timeline = ns:BuildTimeline(specKey, planText, record, boss)
     page.timeline, page.duration = timeline, math.max(1, timeline.duration)
-    page.info:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date ..
+    local borrowed = ""
+    if recordSlug ~= diffSlug then
+        for _, difficulty in pairs(ns.difficulties) do
+            if difficulty.slug == recordSlug then
+                borrowed = "  ·  |cffffd100the " .. difficulty.name .. " pull, there is no " .. ns.difficulties[UI().difficulty].name .. " pull yet|r"
+            end
+        end
+    end
+    page.info:SetText((record.shared and "Shared pull of " or "Recorded pull of ") .. ns:FormatTime(record.duration) ..
+        (record.date and (" on " .. record.date) or "") .. borrowed ..
         (timeline.conflicts > 0 and ("  ·  |cffff5a4d" .. timeline.conflicts .. " not ready in time|r") or ""))
     page.onlyAssigned:Refresh()
     local lanes = Lanes(timeline, boss, planText)
@@ -913,7 +984,7 @@ end
 
 ns:RegisterPage('timeline', "Timeline", 2, function(frame)
     kit = ns.plannerKit
-    page = { frame = frame, Assign = Assign }
+    page = { frame = frame, Assign = Assign, StartDrag = StartDrag, StopDrag = StopDrag }
     BuildToolbar(frame)
     BuildChart(frame)
     BuildPanel(frame)

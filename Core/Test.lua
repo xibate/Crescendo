@@ -56,6 +56,81 @@ function ns:GetRecording(encounterId, diffSlug)
     return boss and boss[diffSlug]
 end
 
+--The recorded pull of a boss on a difficulty, or else the one on the other difficulty: the pull and the slug of the
+--difficulty it is from
+function ns:GetRecordingFor(encounterId, diffSlug)
+    local record = ns:GetRecording(encounterId, diffSlug)
+    if record then
+        return record, diffSlug
+    end
+    for _, difficultyId in ipairs({ 16, 15 }) do
+        local slug = ns.difficulties[difficultyId].slug
+        record = slug ~= diffSlug and ns:GetRecording(encounterId, slug)
+        if record then
+            return record, slug
+        end
+    end
+end
+
+--A recorded pull as text lines to share, one event per line: at;kind;source;key;duration;spellId;count;stage;text
+local FIELDS = { 'kind', 'source', 'key', 'duration', 'spellId', 'count', 'stage' }
+local KINDS = { bar = true, update = true, stop = true, stage = true }
+
+function ns:RecordingLines(record)
+    local lines = {}
+    for _, event in ipairs(record.events) do
+        local parts = { tostring(event.at) }
+        for _, field in ipairs(FIELDS) do
+            table.insert(parts, event[field] ~= nil and tostring(event[field]) or '')
+        end
+        table.insert(parts, event.text or '')
+        table.insert(lines, table.concat(parts, ';'))
+    end
+    return lines
+end
+
+--Reads the lines of a shared pull back into a recording, or nil when they can't be read
+function ns:ReadRecordingLines(lines, duration, date)
+    local events = {}
+    for _, line in ipairs(lines) do
+        local at, rest = line:match('^([%d.]+);(.*)$')
+        if not at then
+            return nil
+        end
+        local event = { at = tonumber(at) }
+        for _, field in ipairs(FIELDS) do
+            local value, after = rest:match('^([^;]*);?(.*)$')
+            rest = after or ''
+            if value and value ~= '' then
+                event[field] = (field == 'kind' or field == 'source') and value or (tonumber(value) or value)
+            end
+        end
+        if rest ~= '' then
+            event.text = rest
+        end
+        if not KINDS[event.kind or ''] or #events >= MAX_EVENTS then
+            return nil
+        end
+        table.insert(events, event)
+    end
+    if #events == 0 or not tonumber(duration) then
+        return nil
+    end
+    return { duration = tonumber(duration), date = date ~= '' and date or nil, events = events, shared = true }
+end
+
+--Keeps a pull someone shared when there is no recorded pull of that boss and difficulty yet, or it is longer. Returns
+--true when it was kept
+function ns:StoreSharedRecording(encounterId, diffSlug, record)
+    local previous = ns:GetRecording(encounterId, diffSlug)
+    if previous and previous.duration >= record.duration then
+        return false
+    end
+    ns.db.recordings[encounterId] = ns.db.recordings[encounterId] or {}
+    ns.db.recordings[encounterId][diffSlug] = record
+    return true
+end
+
 local function Replay(event)
     if event.kind == 'bar' then
         ns:OnBossModBar(event.source, event.key, event.text, event.duration, event.spellId, event.count)
@@ -120,7 +195,7 @@ function ns:StartTest(specKey, diffSlug, encounterId, cast, startAt)
         ns:WriteOutput("Tests can't run during a boss fight")
         return false
     end
-    local record = not cast and ns:GetRecording(encounterId, diffSlug)
+    local record = not cast and ns:GetRecordingFor(encounterId, diffSlug)
     if not cast and not record then
         return false
     end

@@ -1281,7 +1281,7 @@ local function BuildNoteTab(panel)
         end
     end)
     area:SetPoint("TOPLEFT", 0, -66)
-    area:SetPoint("BOTTOMRIGHT", 0, 76)
+    area:SetPoint("BOTTOMRIGHT", 0, 100)
     planner.noteBox = area.box
 
     --Crescendo strings
@@ -1294,9 +1294,14 @@ local function BuildNoteTab(panel)
         { text = "Whole raid", value = 'raid', tooltip = "The plans of every boss of this raid, on Heroic and Mythic." }
     }, 170, 26, function() return UI().shareScope == 'raid' and 'raid' or 'plan' end, function(scope) UI().shareScope = scope end)
     planner.shareScope:SetPoint("LEFT", 0, 0)
+    planner.sharePulls = ns:Checkbox(planner.shareButtons, "With recorded pulls", function() return UI().sharePulls end,
+        function(value) UI().sharePulls = value or nil end,
+        "Adds your recorded pulls of these bosses, so someone who hasn't pulled them yet sees them on the Timeline and can " ..
+        "replay them. A pull makes the string a lot longer.")
+    planner.sharePulls:SetPoint("BOTTOMLEFT", planner.shareButtons, "TOPLEFT", 0, 8)
     planner.shareExport = ns:Button(planner.shareButtons, "Export", 80, 26, function()
         local specKey = Selected()
-        local text, count = ns:ExportPlans(specKey, PlansToExport())
+        local text, count, pulls = ns:ExportPlans(specKey, PlansToExport(), UI().sharePulls)
         if not text then
             ShareStatus("There is no plan to export yet", 'error')
             return
@@ -1307,7 +1312,8 @@ local function BuildNoteTab(panel)
         planner.shareData = nil
         planner.shareImport:SetAlpha(0.4)
         planner.shareImport:SetEnabled(false)
-        ShareStatus(count .. (count == 1 and " plan" or " plans") .. " ready, press Ctrl+C to copy and send it", 'accent')
+        ShareStatus(count .. (count == 1 and " plan" or " plans") .. (pulls > 0 and (" and " .. pulls .. (pulls == 1 and " recorded pull" or " recorded pulls")) or "") ..
+            " ready, press Ctrl+C to copy and send it", 'accent')
     end, true)
     planner.shareExport:SetPoint("LEFT", planner.shareScope, "RIGHT", 8, 0)
     planner.shareImport = ns:ConfirmButton(planner.shareButtons, "Import", "Click to confirm", 130, 26, function()
@@ -1321,7 +1327,8 @@ local function BuildNoteTab(panel)
         end
     end)
     planner.shareImport:SetPoint("LEFT", planner.shareExport, "RIGHT", 8, 0)
-    ns:Tooltip(planner.shareImport, "Import", "Replaces your plans for the bosses in the string, and adds the ramps in it you don't have. Your own ramps with the same name are kept.")
+    ns:Tooltip(planner.shareImport, "Import", "Replaces your plans for the bosses in the string, and adds the ramps in it you don't have. Your own ramps with the same name are kept. " ..
+        "A recorded pull in it is kept when you have none of that boss or a shorter one.")
 
     --MRT notes
     planner.noteButtons = CreateFrame("Frame", nil, tab)
@@ -1357,6 +1364,7 @@ local function RefreshShare()
     local mrt = UI().shareMode == 'mrt'
     planner.shareMode:Refresh()
     planner.shareScope:Refresh()
+    planner.sharePulls:Refresh()
     planner.shareButtons:SetShown(not mrt)
     planner.noteButtons:SetShown(mrt)
     if mrt then
@@ -1634,7 +1642,7 @@ local function RefreshAssignments(line, keepRows)
     end
     planner.ability, planner.scope = ability, scope
     local specKey, diffSlug = Selected()
-    local record = ns:GetRecording(boss, diffSlug)
+    local record = ns:GetRecordingFor(boss, diffSlug)
     planner.cardTimeline = record and ns:BuildTimeline(specKey, GetPlanText(), record, boss) or nil
     planner.cardList.timeline = planner.cardTimeline
     planner.alsoAll:Hide()

@@ -72,8 +72,12 @@ local function Build(frame)
     page.nextUpCount = Add(ns:Slider(left, "How many to show", COLUMN_W - 24, 1, 5, 1, getCount, setCount))
     page.nextUpCount:SetPoint("TOPLEFT", 24, -186)
     page.spokenCountdown = Check(left, "Count down the last seconds before a press", 'spokenCountdown',
-        "Says 3, 2, 1 before the press of a ramp or spell, starting lower when a step of it is spoken at the same time, like " ..
-        "a spell's Soon. Needs Speak the reminders on the Display page.", -240)
+        "Says 5, 4, 3, 2, 1 before the press of a ramp or spell, a moment early so the words land on time. A number is " ..
+        "left out while another step of it is spoken, like a spell's Soon. Needs Speak the reminders on the Display page.", -240)
+    local getFrom, setFrom = Option('countdownFrom')
+    page.countdownFrom = Add(ns:Slider(left, "Count down from", COLUMN_W - 24, 3, 10, 1, getFrom, setFrom,
+        "The first number of the countdown, in seconds before the press."))
+    page.countdownFrom:SetPoint("TOPLEFT", 24, -266)
 
     local right = CreateFrame("Frame", nil, frame)
     right:SetPoint("TOPRIGHT")

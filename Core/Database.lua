@@ -43,6 +43,7 @@ local defaults = {
         nextUpX = 0,
         nextUpY = -150,
         spokenCountdown = false,
+        countdownFrom = 5,
         review = true,
         displayStyle = 'icon',
         barWidth = 260

@@ -78,39 +78,44 @@ function ns:ShowDueReminders(reminders, elapsed)
     end
 end
 
---Where a spoken countdown to the press of a ramp or spell starts: 3, or lower when another step of it would be spoken at
---about the same time, like a spell's 'Soon' at 3 seconds
-function ns:CountdownStart(steps)
-    local from = 3
-    local clash = true
-    while from > 0 and clash do
-        clash = false
+--Speech comes a moment after it is asked for, so the countdown's numbers are said this much early
+local SPEECH_LEAD = 0.25
+
+--The numbers a spoken countdown to the press of a ramp or spell says: from the start set on the General page down to 1.
+--A number is left out when another step of it is spoken then, from just before that step until its words are said,
+--like a spell's 'Soon' at 3 seconds
+function ns:CountdownNumbers(steps)
+    local numbers = {}
+    for number = math.floor(ns.db.options.countdownFrom or 5), 1, -1 do
+        local clash = false
         for _, step in ipairs(steps) do
-            if not step.chargesOf and (step.offset or 0) > 0 and math.abs(step.offset - from) < 0.75 then
+            local offset = step.offset or 0
+            if not step.chargesOf and offset > 0 and number > offset - 1.25 and number < offset + 0.75 then
                 clash = true
             end
         end
-        if clash then
-            from = from - 1
+        if not clash then
+            table.insert(numbers, number)
         end
     end
-    return from
+    return numbers
 end
 
 --With the spoken countdown on, says the last seconds before a press, once it is close enough. Returns true when it was
 --started
 function ns:CountDown(reminder, timeLeft)
     local options = ns.db.options
-    local from = reminder.countFrom or 0
-    if not options.spokenCountdown or not reminder.press or reminder.counted or from < 1 or timeLeft > from + 0.6 then
+    local numbers = reminder.countNumbers or {}
+    local first = numbers[1]
+    if not options.spokenCountdown or not reminder.press or reminder.counted or not first or timeLeft > first + 0.6 + SPEECH_LEAD then
         return false
     end
     reminder.counted = true
     if ns:IsOnCooldownForReminder(reminder, timeLeft) then
         return true
     end
-    for number = from, 1, -1 do
-        local delay = timeLeft - number
+    for _, number in ipairs(numbers) do
+        local delay = timeLeft - number - SPEECH_LEAD
         if delay > -0.3 then
             C_Timer.NewTimer(math.max(0, delay), function()
                 if ns.fight.running then
