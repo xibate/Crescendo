@@ -1699,9 +1699,12 @@ function Refresh(keepRows)
     planner.listWell:ClearAllPoints()
     planner.listWell:SetPoint("TOPLEFT", 0, top)
     planner.listWell:SetPoint("BOTTOMLEFT", 0, 0)
+    --The previews column only shows when the window is wide enough to keep room for the assignments
+    local showPreviews = ns:WindowContentWidth() >= 1010
+    planner.previews:SetShown(showPreviews)
     planner.right:ClearAllPoints()
     planner.right:SetPoint("TOPLEFT", RIGHT_X, top)
-    planner.right:SetPoint("BOTTOMRIGHT", -PREVIEW_W - 32, 0)
+    planner.right:SetPoint("BOTTOMRIGHT", showPreviews and (-PREVIEW_W - 32) or 0, 0)
     planner.previews:ClearAllPoints()
     planner.previews:SetPoint("TOPRIGHT", 0, top)
     planner.previews:SetPoint("BOTTOMRIGHT", 0, 0)
@@ -1721,7 +1724,9 @@ function Refresh(keepRows)
     planner.planTextTab:SetShown(tab == 'plan')
     planner.noteTab:SetShown(tab == 'note')
     RefreshAssignments(selected, keepRows)
-    RefreshPreviews(planText)
+    if showPreviews then
+        RefreshPreviews(planText)
+    end
     if tab == 'plan' then
         planner.planUndo:SetShown(planner.copyUndo ~= nil)
         if not planner.planBox:HasFocus() then

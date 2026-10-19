@@ -7,6 +7,7 @@ local _, ns = ...
 
 local theme = ns.theme
 local WIDTH, HEIGHT = 1320, 720
+local MIN_WIDTH, MIN_HEIGHT = 960, 560
 local SIDE_OPEN, SIDE_FOLDED = 210, 52
 local HEADER = 50
 local ROW_H = 26
@@ -317,7 +318,8 @@ end
 --The width the pages have, with the side bar open or folded
 function ns:WindowContentWidth()
     local folded = UI().sideFolded == true
-    return WIDTH - (folded and SIDE_FOLDED or SIDE_OPEN) - 1 - 2 * ns.windowPadding
+    local width = window and window.width or WIDTH
+    return width - (folded and SIDE_FOLDED or SIDE_OPEN) - 1 - 2 * ns.windowPadding
 end
 
 function ns:SetSideFolded(folded)
@@ -404,6 +406,7 @@ end
 local function CreateWindow()
     local frame = CreateFrame("Frame", "CrescendoWindow", UIParent)
     frame:SetSize(WIDTH, HEIGHT)
+    frame:SetResizable(true)
     frame:SetFrameStrata("DIALOG")
     frame:SetToplevel(true)
     frame:SetClampedToScreen(true)
@@ -445,6 +448,34 @@ local function CreateWindow()
     window.rule:SetHeight(1)
     window.rule:SetColorTexture(1, 1, 1, 0.08)
     window.content = CreateFrame("Frame", nil, frame)
+
+    --Resizing from the bottom right corner. The pages are drawn again once the corner is let go, and the size is saved
+    frame:SetScript("OnSizeChanged", function(_, width, height)
+        window.width, window.height = width, height
+    end)
+    local grip = CreateFrame("Button", nil, frame)
+    grip:SetSize(16, 16)
+    grip:SetPoint("BOTTOMRIGHT", -2, 2)
+    grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+    grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+    grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+    grip:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    grip:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then
+            ns:CloseMenu()
+            frame:StartSizing("BOTTOMRIGHT")
+        end
+    end)
+    grip:SetScript("OnMouseUp", function(_, button)
+        frame:StopMovingOrSizing()
+        if button == "RightButton" then
+            ns:SetWindowSize(WIDTH, HEIGHT)
+            return
+        end
+        ns:SetWindowSize(window.width, window.height)
+    end)
+    ns:Tooltip(grip, "Resize", "Drag to make the window bigger or smaller. Right-click to go back to the normal size.")
+    window.grip = grip
     LayOut()
     ns:RefreshTestStatus()
 end
@@ -470,6 +501,20 @@ function ns:ShowPage(key)
     page.refresh()
 end
 
+--Sets the window's size, kept within what fits the pages and the screen, saves it and draws the page again
+function ns:SetWindowSize(width, height)
+    local maxWidth = math.max(MIN_WIDTH, (UIParent:GetWidth() or 10000) - 20)
+    local maxHeight = math.max(MIN_HEIGHT, (UIParent:GetHeight() or 10000) - 20)
+    width = math.floor(math.max(MIN_WIDTH, math.min(maxWidth, width or WIDTH)) + 0.5)
+    height = math.floor(math.max(MIN_HEIGHT, math.min(maxHeight, height or HEIGHT)) + 0.5)
+    UI().windowSize = (width ~= WIDTH or height ~= HEIGHT) and { width, height } or nil
+    if window then
+        window.width, window.height = width, height
+        window.frame:SetSize(width, height)
+        ns:RefreshWindow()
+    end
+end
+
 --Opens the window, on a page when one is given, otherwise on the page it was on
 function ns:OpenWindow(key)
     if not window then
@@ -479,6 +524,13 @@ function ns:OpenWindow(key)
     if not frame:IsShown() then
         ns:SelectCurrentBoss()
     end
+    if frame.SetResizeBounds then
+        frame:SetResizeBounds(MIN_WIDTH, MIN_HEIGHT, math.max(MIN_WIDTH, (UIParent:GetWidth() or 10000) - 20),
+            math.max(MIN_HEIGHT, (UIParent:GetHeight() or 10000) - 20))
+    end
+    local size = UI().windowSize
+    window.width, window.height = size and size[1] or WIDTH, size and size[2] or HEIGHT
+    frame:SetSize(window.width, window.height)
     local point = UI().windowPoint
     frame:ClearAllPoints()
     if point then

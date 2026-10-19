@@ -409,8 +409,7 @@ local function BuildPanel(frame)
 
     --Middle: what is assigned to it
     local middle = CreateFrame("Frame", nil, panel)
-    middle:SetPoint("TOPLEFT", LEFT_W + 18, 0)
-    middle:SetPoint("BOTTOMRIGHT", -RIGHT_W - 18, 0)
+    page.middle = middle
     page.cardsLabel = ns:SectionLabel(middle, "Assigned to this cast")
     page.cardsLabel:SetPoint("TOPLEFT", 0, 0)
     local list = ns:ScrollList(middle)
@@ -432,6 +431,7 @@ local function BuildPanel(frame)
     right:SetPoint("TOPRIGHT", 0, 0)
     right:SetPoint("BOTTOMRIGHT", 0, 0)
     right:SetWidth(RIGHT_W)
+    page.nextColumn = right
     page.nextLabel = ns:SectionLabel(right, "Next up")
     page.nextLabel:SetPoint("TOPLEFT", 0, 0)
     local function Row(y, height)
@@ -866,6 +866,12 @@ function Refresh(keepRows)
         UpdateReplayButtons()
         return
     end
+    --Next up only shows when the window is wide enough to keep room for the assignment cards
+    local showNext = ns:WindowContentWidth() >= 900
+    page.nextColumn:SetShown(showNext)
+    page.middle:ClearAllPoints()
+    page.middle:SetPoint("TOPLEFT", LEFT_W + 18, 0)
+    page.middle:SetPoint("BOTTOMRIGHT", showNext and (-RIGHT_W - 18) or 0, 0)
     local timeline = ns:BuildTimeline(specKey, planText, record, boss)
     page.timeline, page.duration = timeline, math.max(1, timeline.duration)
     page.info:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date ..
