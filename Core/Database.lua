@@ -32,7 +32,9 @@ local defaults = {
         mrtPersonalNote = false,
         timerDuration = 3,
         snapToGrid = true,
-        hideOnCooldown = false
+        hideOnCooldown = false,
+        sound = 'none',
+        soundOn = 'all'
     },
     plans = {},
     testPlans = {},

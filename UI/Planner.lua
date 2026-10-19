@@ -204,12 +204,16 @@ local function DescribeAssignment(assignment)
 end
 
 --Every message of an assignment and when it shows, in the tooltip of its description
-local function AssignmentTooltip(tooltip, assignment)
+local function AssignmentTooltip(tooltip, assignment, append)
     local schedule = assignment and AssignmentSchedule(assignment)
     if not schedule or #schedule == 0 then
-        return false
+        return append or false
     end
-    tooltip:SetText(assignment.entry, 1, 1, 1)
+    if append then
+        tooltip:AddLine(assignment.entry, 1, 1, 1)
+    else
+        tooltip:SetText(assignment.entry, 1, 1, 1)
+    end
     tooltip:AddLine("When each message shows, counted from the boss ability:", 0.7, 0.7, 0.7, true)
     for _, item in ipairs(schedule) do
         local when
@@ -234,6 +238,9 @@ end
 ------------------------------------------------------------------------------------------------------------------------
 
 local Refresh
+local ConflictTooltip
+local CopyMenuItems, CopyPlanTo
+local NotReadyCasts
 
 local function Column(page, x, width)
     local column = CreateFrame("Frame", nil, page)
@@ -908,7 +915,18 @@ local function AssignmentCard(index)
     card.note = ns:Text(card.noteFrame, 10, theme.dim)
     card.note:SetPoint("LEFT")
     card.note:SetPoint("RIGHT")
-    ns:Tooltip(card.noteFrame, function(tooltip) return AssignmentTooltip(tooltip, card.assignment) end)
+    ns:Tooltip(card.noteFrame, function(tooltip)
+        local timeline, append = planner.cardTimeline, false
+        for _, use in ipairs(timeline and timeline.uses or {}) do
+            if use.conflict and use.entry == card.assignment.entry then
+                ConflictTooltip(tooltip, { use = use })
+                tooltip:AddLine(" ")
+                append = true
+                break
+            end
+        end
+        return AssignmentTooltip(tooltip, card.assignment, append)
+    end)
     planner.cards[index] = card
     return card
 end
@@ -1034,6 +1052,17 @@ local function OpenCast(cast)
     end
 end
 
+--Why a use of a spell won't be ready, in the tooltip of its reminder
+function ConflictTooltip(tooltip, reminder)
+    local use, conflict = reminder.use, reminder.use.conflict
+    tooltip:SetText("Not ready in time", theme.error[1], theme.error[2], theme.error[3])
+    tooltip:AddLine(use.entry .. " is used at " .. ns:FormatTime(use.at) .. ", but it is only back at " ..
+        ns:FormatTime(conflict.readyAt) .. ".", 1, 1, 1, true)
+    local cooldown = conflict.cooldown
+    tooltip:AddLine("Cooldown " .. ns:FormatTime(cooldown.duration) .. (cooldown.charges > 1 and (", " .. cooldown.charges .. " charges") or "") ..
+        (cooldown.seen and "" or ", the spell's base cooldown: cast it once out of combat so the addon knows yours with your talents"), 0.7, 0.7, 0.7, true)
+end
+
 local function TimelineRow(index)
     local row = planner.timelineRows[index]
     if row then
@@ -1067,6 +1096,9 @@ local function TimelineRow(index)
     end)
     row:SetScript("OnLeave", function(self) self:Paint() end)
     ns:Tooltip(row, function(tooltip, self)
+        if self.conflict then
+            return ConflictTooltip(tooltip, self.reminder)
+        end
         if not self.cast then
             return false
         end
@@ -1162,14 +1194,17 @@ local function RefreshTimeline()
         return
     end
     planner.timelineEmpty:Hide()
-    planner.timelineInfo:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date)
     local timeline = ns:BuildTimeline(specKey, GetPlanText(), record, boss)
+    planner.timelineInfo:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date ..
+        (timeline.conflicts > 0 and ("  |cffff5a4d" .. timeline.conflicts .. " not ready in time|r") or ""))
     local lines = TimelineLines(timeline, boss)
     local r, g, b = ns:GetAccent()
     local y = 0
     for index, line in ipairs(lines) do
         local row = TimelineRow(index)
         row.kind, row.at, row.cast, row.current = line.kind, line.at, line.cast, false
+        row.reminder = line.reminder
+        row.conflict = line.reminder and line.reminder.use and line.reminder.use.conflict
         local height = TIMELINE_ROW[line.kind]
         row:SetHeight(height)
         row:ClearAllPoints()
@@ -1205,9 +1240,14 @@ local function RefreshTimeline()
             row.icon:SetTexture(reminder.icon or QUESTION_MARK)
             row.icon:Show()
             row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-            row.label:SetText((reminder.approximate and "~ " or "") .. reminder.text)
-            row.label:SetTextColor(r, g, b, 0.9)
-            row.time:SetTextColor(r, g, b, 0.7)
+            row.label:SetText((row.conflict and "! " or "") .. (reminder.approximate and "~ " or "") .. reminder.text)
+            if row.conflict then
+                row.label:SetTextColor(ErrorColor())
+                row.time:SetTextColor(ErrorColor(0.8))
+            else
+                row.label:SetTextColor(r, g, b, 0.9)
+                row.time:SetTextColor(r, g, b, 0.7)
+            end
         end
         row:Paint()
         row:Show()
@@ -1251,6 +1291,49 @@ end
 -- Right: plan text and MRT note
 ------------------------------------------------------------------------------------------------------------------------
 
+--Where the plan can be copied to: the other difficulty of the boss, and the other bosses of its raid on this difficulty
+function CopyMenuItems()
+    local _, _, boss = Selected()
+    local difficulty = UI().difficulty
+    local other = difficulty == 15 and 16 or 15
+    local items = { { text = ns.bosses[boss].name, header = true },
+        { text = ns.difficulties[other].name, value = { encounterId = boss, difficulty = other } } }
+    for _, raid in ipairs(ns.raids) do
+        if raid.name == ns.bosses[boss].raid and #raid.bosses > 1 then
+            table.insert(items, { text = raid.name .. ", " .. ns.difficulties[difficulty].name, header = true })
+            for _, raidBoss in ipairs(raid.bosses) do
+                if raidBoss.encounterId ~= boss then
+                    table.insert(items, { text = raidBoss.name, value = { encounterId = raidBoss.encounterId, difficulty = difficulty } })
+                end
+            end
+        end
+    end
+    return items
+end
+
+--Copies the saved plan to another boss or difficulty, keeping what was there to undo
+function CopyPlanTo(target)
+    local specKey, _, boss = Selected()
+    local diffSlug = ns.difficulties[target.difficulty].slug
+    local name = ns.bosses[target.encounterId].name .. " " .. ns.difficulties[target.difficulty].name
+    local text = GetPlanText()
+    if not text:find('%S') then
+        planner.planStatus:SetText("There is no saved plan to copy")
+        planner.planStatus:SetTextColor(ErrorColor())
+        return
+    end
+    local old = ns:GetPlan(specKey, diffSlug, target.encounterId)
+    ns:SetPlan(specKey, diffSlug, target.encounterId, text)
+    planner.copyUndo = old:find('%S') and { specKey = specKey, diffSlug = diffSlug, encounterId = target.encounterId, text = old, name = name } or nil
+    Refresh()
+    local status = "Copied to " .. name .. (planner.copyUndo and ", its plan was replaced" or "")
+    if target.encounterId ~= boss and ns:ParsePlan(text).abilities[1] then
+        status = status .. ". Its @ lines are for " .. ns.bosses[boss].name .. "'s abilities"
+    end
+    planner.planStatus:SetText(status)
+    planner.planStatus:SetTextColor(Accent())
+end
+
 local function BuildPlanTextTab(panel)
     local tab = CreateFrame("Frame", nil, panel)
     tab:SetAllPoints()
@@ -1260,7 +1343,7 @@ local function BuildPlanTextTab(panel)
         planner.planStatus:SetTextColor(1, 1, 1, 0.53)
     end)
     area:SetPoint("TOPLEFT", 0, 0)
-    area:SetPoint("BOTTOMRIGHT", 0, 76)
+    area:SetPoint("BOTTOMRIGHT", 0, 100)
     planner.planBox = area.box
 
     planner.planSave = ns:Button(tab, "Save", 90, 26, function()
@@ -1277,9 +1360,24 @@ local function BuildPlanTextTab(panel)
             planner.planStatus:SetTextColor(ErrorColor())
         end
     end, true)
-    planner.planSave:SetPoint("BOTTOMLEFT", 0, 42)
+    planner.planSave:SetPoint("BOTTOMLEFT", 0, 66)
+    planner.planCopy = ns:Dropdown(tab, 120, 26, function() return "Copy to..." end, CopyMenuItems, CopyPlanTo)
+    planner.planCopy:SetPoint("LEFT", planner.planSave, "RIGHT", 8, 0)
+    ns:Tooltip(planner.planCopy, "Copy this plan", "Copies the saved plan to the other difficulty of this boss, or to another boss of the raid. " ..
+        "A plan that is there already is replaced, and Undo brings it back.")
+    planner.planUndo = ns:Button(tab, "Undo", 70, 26, function()
+        local undo = planner.copyUndo
+        if undo then
+            ns:SetPlan(undo.specKey, undo.diffSlug, undo.encounterId, undo.text)
+            planner.copyUndo = nil
+            Refresh()
+            planner.planStatus:SetText("Put back the plan of " .. undo.name)
+            planner.planStatus:SetTextColor(1, 1, 1, 0.53)
+        end
+    end)
+    planner.planUndo:SetPoint("LEFT", planner.planCopy, "RIGHT", 8, 0)
     planner.planStatus = ns:Text(tab, 11, theme.dim)
-    planner.planStatus:SetPoint("LEFT", planner.planSave, "RIGHT", 10, 0)
+    planner.planStatus:SetPoint("BOTTOMLEFT", 0, 44)
     planner.planStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
     local help = ns:Text(tab, 10, theme.dim)
     help:SetPoint("BOTTOMLEFT", 0, 0)
@@ -1291,42 +1389,171 @@ local function BuildPlanTextTab(panel)
         "@Spectral Coils p2 #2 -3 - Power Word: Barrier for boss abilities (p2 only in stage 2). Lines starting with -- are notes.")
 end
 
+--The plans a Crescendo string exports: the selected plan, or every boss of its raid on both difficulties
+local function PlansToExport()
+    local _, diffSlug, boss = Selected()
+    if UI().shareScope ~= 'raid' then
+        return { { encounterId = boss, diffSlug = diffSlug } }
+    end
+    local plans = {}
+    for _, raid in ipairs(ns.raids) do
+        if raid.name == ns.bosses[boss].raid then
+            for _, raidBoss in ipairs(raid.bosses) do
+                for _, diffId in ipairs({ 15, 16 }) do
+                    table.insert(plans, { encounterId = raidBoss.encounterId, diffSlug = ns.difficulties[diffId].slug })
+                end
+            end
+        end
+    end
+    return plans
+end
+
+local function ShareStatus(text, color)
+    planner.noteStatus:SetText(text)
+    if color == 'error' then
+        planner.noteStatus:SetTextColor(ErrorColor())
+    elseif color == 'accent' then
+        planner.noteStatus:SetTextColor(Accent())
+    else
+        planner.noteStatus:SetTextColor(1, 1, 1, 0.53)
+    end
+end
+
+--Reads what is pasted in Crescendo mode and says what importing it does
+local function CheckShareText()
+    local text = planner.noteBox:GetText() or ''
+    planner.shareData = nil
+    if not text:find('%S') then
+        ShareStatus("Paste a plan string from another player here, or export yours.")
+    else
+        local data, problem = ns:ReadPlanString(text)
+        planner.shareData = data
+        if data then
+            ShareStatus("Ready to import " .. ns:DescribePlanImport(data), 'accent')
+        else
+            ShareStatus(problem, 'error')
+        end
+    end
+    planner.shareImport:SetAlpha(planner.shareData and 1 or 0.4)
+    planner.shareImport:SetEnabled(planner.shareData ~= nil)
+end
+
 local function BuildNoteTab(panel)
     local tab = CreateFrame("Frame", nil, panel)
     tab:SetAllPoints()
     planner.noteTab = tab
-    local intro = ns:Text(tab, 11, theme.dim)
-    intro:SetPoint("TOPLEFT", 0, 0)
-    intro:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
-    intro:SetWordWrap(true)
-    intro:SetText("Paste an MRT note to take your times from it, or copy this plan out as note lines. Boss ability lines stay in the plan.")
-    local area = ns:TextArea(tab, function(text) UI().note = text end)
-    area:SetPoint("TOPLEFT", 0, -36)
+    planner.shareMode = ns:Segmented(tab, {
+        { text = "Crescendo string", value = 'crescendo', tooltip = "Share plans with other Crescendo users, with the ramps they use." },
+        { text = "MRT note", value = 'mrt', tooltip = "Take your times from an MRT note, or copy the plan out as note lines." }
+    }, 240, 24, function() return UI().shareMode == 'mrt' and 'mrt' or 'crescendo' end, function(mode)
+        UI().shareMode = mode
+        planner.noteBox:SetText('')
+        Refresh()
+    end)
+    planner.shareMode:SetPoint("TOPLEFT", 0, 0)
+    planner.noteIntro = ns:Text(tab, 11, theme.dim)
+    planner.noteIntro:SetPoint("TOPLEFT", 0, -32)
+    planner.noteIntro:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
+    planner.noteIntro:SetWordWrap(true)
+    local area = ns:TextArea(tab, function(text)
+        if UI().shareMode == 'mrt' then
+            UI().note = text
+        else
+            CheckShareText()
+        end
+    end)
+    area:SetPoint("TOPLEFT", 0, -66)
     area:SetPoint("BOTTOMRIGHT", 0, 76)
     planner.noteBox = area.box
-    planner.noteImport = ns:ConfirmButton(tab, "Use times from note", "Click again to replace", 170, 26, function()
+
+    --Crescendo strings
+    planner.shareButtons = CreateFrame("Frame", nil, tab)
+    planner.shareButtons:SetPoint("BOTTOMLEFT", 0, 42)
+    planner.shareButtons:SetPoint("BOTTOMRIGHT", 0, 42)
+    planner.shareButtons:SetHeight(26)
+    planner.shareScope = ns:Segmented(planner.shareButtons, {
+        { text = "This plan", value = 'plan', tooltip = "The plan of the selected boss and difficulty." },
+        { text = "Whole raid", value = 'raid', tooltip = "The plans of every boss of this raid, on Heroic and Mythic." }
+    }, 170, 26, function() return UI().shareScope == 'raid' and 'raid' or 'plan' end, function(scope) UI().shareScope = scope end)
+    planner.shareScope:SetPoint("LEFT", 0, 0)
+    planner.shareExport = ns:Button(planner.shareButtons, "Export", 80, 26, function()
+        local specKey = Selected()
+        local text, count = ns:ExportPlans(specKey, PlansToExport())
+        if not text then
+            ShareStatus("There is no plan to export yet", 'error')
+            return
+        end
+        planner.noteBox:SetText(text)
+        planner.noteBox:SetFocus()
+        planner.noteBox:HighlightText()
+        planner.shareData = nil
+        planner.shareImport:SetAlpha(0.4)
+        planner.shareImport:SetEnabled(false)
+        ShareStatus(count .. (count == 1 and " plan" or " plans") .. " ready, press Ctrl+C to copy and send it", 'accent')
+    end, true)
+    planner.shareExport:SetPoint("LEFT", planner.shareScope, "RIGHT", 8, 0)
+    planner.shareImport = ns:ConfirmButton(planner.shareButtons, "Import", "Click to confirm", 130, 26, function()
+        if planner.shareData then
+            ns:ImportPlans(planner.shareData)
+            local text = "Imported " .. ns:DescribePlanImport(planner.shareData):gsub(", replaces yours", "")
+            planner.noteBox:SetText('')
+            planner.shareData = nil
+            Refresh()
+            ShareStatus(text, 'accent')
+        end
+    end)
+    planner.shareImport:SetPoint("LEFT", planner.shareExport, "RIGHT", 8, 0)
+    ns:Tooltip(planner.shareImport, "Import", "Replaces your plans for the bosses in the string, and adds the ramps in it you don't have. Your own ramps with the same name are kept.")
+
+    --MRT notes
+    planner.noteButtons = CreateFrame("Frame", nil, tab)
+    planner.noteButtons:SetPoint("BOTTOMLEFT", 0, 42)
+    planner.noteButtons:SetPoint("BOTTOMRIGHT", 0, 42)
+    planner.noteButtons:SetHeight(26)
+    planner.noteImport = ns:ConfirmButton(planner.noteButtons, "Use times from note", "Click again to replace", 170, 26, function()
         local specKey, diffSlug, boss = Selected()
         ns:ImportNoteIntoPlan(specKey, diffSlug, boss, planner.noteBox:GetText())
         Refresh()
-        planner.noteStatus:SetText("The plan's times now come from the note")
+        ShareStatus("The plan's times now come from the note", 'accent')
     end)
-    planner.noteImport:SetPoint("BOTTOMLEFT", 0, 42)
-    planner.noteExport = ns:Button(tab, "Copy plan as note", 150, 26, function()
+    planner.noteImport:SetPoint("LEFT", 0, 0)
+    planner.noteExport = ns:Button(planner.noteButtons, "Copy plan as note", 150, 26, function()
         local specKey = Selected()
         local note = ns:PlanToNote(GetPlanText(), specKey)
         UI().note = note
         planner.noteBox:SetText(note)
         planner.noteBox:SetFocus()
         planner.noteBox:HighlightText()
-        planner.noteStatus:SetText("Press Ctrl+C to copy")
+        ShareStatus("Press Ctrl+C to copy")
     end)
     planner.noteExport:SetPoint("LEFT", planner.noteImport, "RIGHT", 8, 0)
     planner.noteStatus = ns:Text(tab, 11, theme.dim)
-    planner.noteStatus:SetPoint("BOTTOMLEFT", 0, 14)
+    planner.noteStatus:SetPoint("BOTTOMLEFT", 0, 0)
     planner.noteStatus:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
+    planner.noteStatus:SetHeight(34)
+    planner.noteStatus:SetWordWrap(true)
+    planner.noteStatus:SetJustifyV("TOP")
 end
 
-local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "MRT note" },
+local function RefreshShare()
+    local mrt = UI().shareMode == 'mrt'
+    planner.shareMode:Refresh()
+    planner.shareScope:Refresh()
+    planner.shareButtons:SetShown(not mrt)
+    planner.noteButtons:SetShown(mrt)
+    if mrt then
+        planner.noteIntro:SetText("Paste an MRT note to take your times from it, or copy this plan out as note lines. Boss ability lines stay in the plan.")
+        if not planner.noteBox:HasFocus() then
+            planner.noteBox:SetText(UI().note or '')
+        end
+        ShareStatus("")
+    else
+        planner.noteIntro:SetText("Send your plans to another Crescendo user: export, copy and paste it anywhere. To import, paste a string from someone here.")
+        CheckShareText()
+    end
+end
+
+local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "Share" },
     { key = 'timeline', text = "Timeline" } }
 
 local function BuildRight(page)
@@ -1361,6 +1588,23 @@ local function BuildRight(page)
     BuildTimelineTab(panel)
 end
 
+--The casts of an ability in the recorded pull on which an assignment's spell won't be ready, like 'cast 3 (02:10)'
+function NotReadyCasts(assignment, ability, scope)
+    local timeline = planner.cardTimeline
+    if not timeline then
+        return nil
+    end
+    local casts = {}
+    for _, use in ipairs(timeline.uses) do
+        local cast = use.cast
+        if use.conflict and cast and use.entry == assignment.entry and (scope == 'all' or cast.stage == scope) and
+            ((ability.spellId and cast.spellId == ability.spellId) or (ability.name and cast.name:lower() == ability.name:lower())) then
+            table.insert(casts, (cast.count and ("cast " .. cast.count .. " ") or "") .. "(" .. ns:FormatTime(cast.at) .. ")")
+        end
+    end
+    return #casts > 0 and table.concat(casts, ", ") or nil
+end
+
 local function RefreshAssignments(line, keepRows)
     local _, _, boss = Selected()
     local ability, scope = line and line.ability, line and line.scope or 'all'
@@ -1377,6 +1621,9 @@ local function RefreshAssignments(line, keepRows)
         end
     end
     planner.ability, planner.scope = ability, scope
+    local specKey, diffSlug = Selected()
+    local record = ns:GetRecording(boss, diffSlug)
+    planner.cardTimeline = record and ns:BuildTimeline(specKey, GetPlanText(), record, boss) or nil
     for _, card in ipairs(planner.cards) do
         card:Hide()
     end
@@ -1436,6 +1683,10 @@ local function RefreshAssignments(line, keepRows)
         card.castsBox:SetShown(custom)
         card.castsBox:SetValue(CastsBoxText(assignment))
         local text, isError = DescribeAssignment(assignment)
+        local notReady = not isError and NotReadyCasts(assignment, ability, scope)
+        if notReady then
+            text, isError = "Not ready in time on " .. notReady .. "  ·  see the Timeline", true
+        end
         card.note:SetText(text)
         if isError then
             card.note:SetTextColor(ErrorColor())
@@ -1488,15 +1739,14 @@ function Refresh(keepRows)
         RefreshTimeline()
         UpdatePlayhead()
     elseif tab == 'plan' then
+        planner.planUndo:SetShown(planner.copyUndo ~= nil)
         if not planner.planBox:HasFocus() then
             planner.planBox:SetText(planText)
             planner.planStatus:SetText(ns.specNames[specKey] .. ", " .. ns.difficulties[UI().difficulty].name .. " " .. ns.bosses[boss].name)
             planner.planStatus:SetTextColor(1, 1, 1, 0.53)
         end
     elseif tab == 'note' then
-        if not planner.noteBox:HasFocus() then
-            planner.noteBox:SetText(UI().note or '')
-        end
+        RefreshShare()
     else
         RefreshAssignments(selected, keepRows)
     end

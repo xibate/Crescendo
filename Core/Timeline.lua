@@ -79,8 +79,10 @@ local function StepTime(step, landsAt)
     return landsAt - step.offset, false
 end
 
---{ duration, stages, casts, reminders } of a recording with a plan. Casts have assigned = true when a reminder is tied
---to them, reminders are { at, text, icon, entry, cast (the cast it is for, if any), approximate }
+--{ duration, stages, casts, reminders, uses, conflicts } of a recording with a plan. Casts have assigned = true when a
+--reminder is tied to them, reminders are { at, text, icon, entry, cast (the cast it is for, if any), approximate, use }.
+--uses are when each ramp, spell or trinket lands { entry, at, cast, conflict when it won't be ready, see
+--ns:FindCooldownConflicts }, and conflicts is how many won't be ready
 function ns:BuildTimeline(specKey, planText, record, encounterId)
     local timeline = { duration = record.duration, stages = Stages(record), casts = Casts(record), reminders = {} }
     local stepsCache = {}
@@ -92,7 +94,8 @@ function ns:BuildTimeline(specKey, planText, record, encounterId)
     end
     --A timed step that would come before its pull or stage is left out, like the fight does, and an ability's step due
     --before its bar showed comes when the bar shows
-    local function Add(step, landsAt, earliest, entry, cast)
+    local uses = {}
+    local function Add(step, landsAt, earliest, entry, cast, use)
         if not ns:ShouldUseStep(step) then
             return
         end
@@ -102,21 +105,35 @@ function ns:BuildTimeline(specKey, planText, record, encounterId)
         end
         at = math.max(at, earliest)
         if at <= timeline.duration then
-            table.insert(timeline.reminders, { at = at, text = step.text, icon = step.icon, entry = entry, cast = cast, approximate = approximate })
+            table.insert(timeline.reminders, { at = at, text = step.text, icon = step.icon, entry = entry, cast = cast,
+                approximate = approximate, use = use })
         end
     end
     local plan = ns:ParsePlan(planText)
     --Times after the pull, and after each start of a stage while that stage lasts
+    local function Use(entry, at, cast)
+        local use = { entry = entry, at = at, cast = cast }
+        if at <= timeline.duration then
+            table.insert(uses, use)
+        end
+        return use
+    end
     for _, timing in ipairs(plan.times) do
-        for _, step in ipairs(Steps(timing.entry)) do
-            if timing.phase == 'main' then
-                Add(step, timing.seconds, 0, timing.entry)
-            else
-                for index, stage in ipairs(timeline.stages) do
-                    local stageEnd = timeline.stages[index + 1] and timeline.stages[index + 1].at or timeline.duration
-                    local landsAt = stage.at + timing.seconds
-                    if stage.stage == timing.phase and landsAt - step.offset < stageEnd then
-                        Add(step, landsAt, stage.at, timing.entry)
+        if timing.phase == 'main' then
+            local use = Use(timing.entry, timing.seconds)
+            for _, step in ipairs(Steps(timing.entry)) do
+                Add(step, timing.seconds, 0, timing.entry, nil, use)
+            end
+        else
+            for index, stage in ipairs(timeline.stages) do
+                local stageEnd = timeline.stages[index + 1] and timeline.stages[index + 1].at or timeline.duration
+                local landsAt = stage.at + timing.seconds
+                if stage.stage == timing.phase and landsAt < stageEnd then
+                    local use = Use(timing.entry, landsAt)
+                    for _, step in ipairs(Steps(timing.entry)) do
+                        if landsAt - step.offset < stageEnd then
+                            Add(step, landsAt, stage.at, timing.entry, nil, use)
+                        end
                     end
                 end
             end
@@ -131,13 +148,16 @@ function ns:BuildTimeline(specKey, planText, record, encounterId)
                 local steps = Steps(anchor.entry)
                 if #steps > 0 then
                     cast.assigned = true
-                end
-                for _, step in ipairs(steps) do
-                    Add(step, cast.at + anchor.shift, cast.barAt, anchor.entry, cast)
+                    local use = Use(anchor.entry, cast.at + anchor.shift, cast)
+                    for _, step in ipairs(steps) do
+                        Add(step, cast.at + anchor.shift, cast.barAt, anchor.entry, cast, use)
+                    end
                 end
             end
         end
     end
     table.sort(timeline.reminders, function(a, b) return a.at < b.at end)
+    timeline.uses = uses
+    timeline.conflicts = ns:FindCooldownConflicts(specKey, uses)
     return timeline
 end

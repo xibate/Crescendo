@@ -158,6 +158,7 @@ function ns:ShowReminder(reminder)
         ClearFrame(frame)
     end)
     ns:SendTts(reminder.tts or reminder.text)
+    ns:PlayReminderSound(reminder)
 end
 
 --Applies changed display options to the displays that exist
@@ -207,4 +208,88 @@ function ns:ToggleDisplay()
             end
         end
     end
+end
+
+--Sounds a reminder can play: a few of the game's own, and sounds other addons share through LibSharedMedia
+local GAME_SOUNDS = {
+    { key = 'RAID_WARNING', name = "Raid warning", id = 8959 },
+    { key = 'READY_CHECK', name = "Ready check", id = 8960 },
+    { key = 'ALARM_CLOCK_WARNING_3', name = "Alarm", id = 12889 },
+    { key = 'UI_RAID_BOSS_WHISPER_WARNING', name = "Boss whisper", id = 37666 },
+    { key = 'MAP_PING', name = "Map ping", id = 3175 }
+}
+local MAX_SHARED_SOUNDS = 15
+
+local function SharedMedia()
+    if type(_G.LibStub) ~= 'function' then
+        return nil
+    end
+    local ok, media = pcall(_G.LibStub, "LibSharedMedia-3.0", true)
+    if ok and type(media) == 'table' and type(media.List) == 'function' and type(media.Fetch) == 'function' then
+        return media
+    end
+end
+
+--The sounds to pick from, { value, text, header }, for a menu
+function ns:SoundMenuItems()
+    local items = { { text = "No sound", value = 'none' }, { text = "Game sounds", header = true } }
+    for _, sound in ipairs(GAME_SOUNDS) do
+        table.insert(items, { text = sound.name, value = 'game:' .. sound.key })
+    end
+    local media = SharedMedia()
+    local shared = media and media:List("sound") or {}
+    if #shared > 0 then
+        table.insert(items, { text = "Shared media", header = true })
+        for index, name in ipairs(shared) do
+            if index > MAX_SHARED_SOUNDS then
+                break
+            end
+            if name ~= "None" then
+                table.insert(items, { text = name, value = 'media:' .. name })
+            end
+        end
+    end
+    return items
+end
+
+function ns:SoundName(value)
+    if value == nil or value == 'none' then
+        return "No sound"
+    end
+    for _, sound in ipairs(GAME_SOUNDS) do
+        if value == 'game:' .. sound.key then
+            return sound.name
+        end
+    end
+    return (value:gsub('^media:', ''))
+end
+
+function ns:PlaySoundChoice(value)
+    if value == nil or value == 'none' then
+        return
+    end
+    local key = value:match('^game:(.+)$')
+    if key then
+        for _, sound in ipairs(GAME_SOUNDS) do
+            if sound.key == key then
+                PlaySound((SOUNDKIT and SOUNDKIT[key]) or sound.id, "Master")
+            end
+        end
+        return
+    end
+    local name = value:match('^media:(.+)$')
+    local media = name and SharedMedia()
+    local path = media and media:Fetch("sound", name, true)
+    if path then
+        PlaySoundFile(path, "Master")
+    end
+end
+
+--Plays the reminder sound, for every reminder or only for the press (the step at the ramp's or spell's time)
+function ns:PlayReminderSound(reminder)
+    local options = ns.db.options
+    if options.soundOn == 'press' and ((reminder.offset or 0) ~= 0 or reminder.chargesOf) then
+        return
+    end
+    ns:PlaySoundChoice(options.sound)
 end

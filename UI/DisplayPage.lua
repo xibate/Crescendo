@@ -118,7 +118,7 @@ local function Build(frame)
     right:SetPoint("TOPRIGHT")
     right:SetPoint("BOTTOMRIGHT")
     right:SetWidth(COLUMN_W)
-    ns:SectionLabel(right, "Voice"):SetPoint("TOPLEFT", 0, 0)
+    ns:SectionLabel(right, "Voice and sound"):SetPoint("TOPLEFT", 0, 0)
     page.tts = Add(ns:Checkbox(right, "Speak the reminders", Option('ttsEnabled')))
     page.tts:SetPoint("TOPLEFT", 0, -20)
     page.play = ns:Button(right, "Play voice", 110, 24, function()
@@ -136,30 +136,50 @@ local function Build(frame)
     page.volume = Add(ns:Slider(right, "Volume", COLUMN_W, 0, 100, 1, Option('ttsVolume')))
     page.volume:SetPoint("TOPLEFT", 0, -150)
 
-    ns:SectionLabel(right, "Reminders"):SetPoint("TOPLEFT", 0, -210)
+    local soundLabel = ns:Text(right, 11, theme.dim)
+    soundLabel:SetPoint("TOPLEFT", 0, -200)
+    soundLabel:SetText("Sound")
+    page.sound = Add(ns:Dropdown(right, 216, 24, function() return ns:SoundName(Options().sound) end,
+        function() return ns:SoundMenuItems() end, function(value)
+            Options().sound = value
+            ns:PlaySoundChoice(value)
+        end))
+    page.sound:SetPoint("TOPLEFT", 0, -216)
+    ns:Tooltip(page.sound, "Sound", "A sound that plays with the reminders, next to or instead of the voice. Sounds other addons " ..
+        "share (LibSharedMedia, which BigWigs and others bring) are listed too. Picking one plays it.")
+    local soundOnLabel = ns:Text(right, 11, theme.dim)
+    soundOnLabel:SetPoint("TOPLEFT", 224, -200)
+    soundOnLabel:SetText("Play it on")
+    page.soundOn = Add(ns:Segmented(right, {
+        { text = "Every reminder", value = 'all' },
+        { text = "Only the press", value = 'press', tooltip = "Only the reminder at the moment to press: the last step of a ramp, or the cast of a spell or trinket." }
+    }, 216, 24, function() return Options().soundOn == 'press' and 'press' or 'all' end, function(value) Options().soundOn = value end))
+    page.soundOn:SetPoint("TOPLEFT", 224, -216)
+
+    ns:SectionLabel(right, "Reminders"):SetPoint("TOPLEFT", 0, -264)
     local getSetupOnly, setSetupOnly = Option('preReqsOnly')
     page.setupOnly = Add(ns:Checkbox(right, "Only setup steps", getSetupOnly, setSetupOnly,
         "Leave out the final press of each ramp and only show the steps marked as setup, for when another addon or weakaura already warns you about the press."))
-    page.setupOnly:SetPoint("TOPLEFT", 0, -230)
+    page.setupOnly:SetPoint("TOPLEFT", 0, -284)
     local getCountdown, setCountdown = Option('timerDuration')
     page.countdown = Add(ns:Slider(right, "Spell countdown (seconds)", COLUMN_W, 2, 10, 1, getCountdown, setCountdown,
         "How many seconds before a spell in the plan its countdown starts. Ramps have their own steps."))
-    page.countdown:SetPoint("TOPLEFT", 0, -282)
+    page.countdown:SetPoint("TOPLEFT", 0, -336)
     local getHide, setHide = Option('hideOnCooldown')
     page.hideOnCooldown = Add(ns:Checkbox(right, "Hide reminders while the spell or trinket is on cooldown", getHide, setHide,
         "Leaves out the reminders of a ramp, spell or trinket that won't be ready by the time it should land. A ramp goes by " ..
         "the spell set for it on the Ramps page.\n\nDuring boss fights the game can hide cooldowns from addons. Then it goes " ..
         "by when you last cast the spell, and when it can't tell, the reminder shows."))
     page.hideOnCooldown:SetWidth(COLUMN_W)
-    page.hideOnCooldown:SetPoint("TOPLEFT", 0, -254)
+    page.hideOnCooldown:SetPoint("TOPLEFT", 0, -308)
 
-    ns:SectionLabel(right, "MRT notes"):SetPoint("TOPLEFT", 0, -342)
+    ns:SectionLabel(right, "MRT notes"):SetPoint("TOPLEFT", 0, -396)
     page.mainNote = Add(ns:Checkbox(right, "Take my times from the main MRT note", Option('readFromNote')))
-    page.mainNote:SetPoint("TOPLEFT", 0, -362)
+    page.mainNote:SetPoint("TOPLEFT", 0, -416)
     page.personalNote = Add(ns:Checkbox(right, "Take my times from my personal MRT note", Option('mrtPersonalNote')))
-    page.personalNote:SetPoint("TOPLEFT", 0, -386)
+    page.personalNote:SetPoint("TOPLEFT", 0, -440)
     local noteHelp = ns:Text(right, 10, theme.dim)
-    noteHelp:SetPoint("TOPLEFT", 0, -412)
+    noteHelp:SetPoint("TOPLEFT", 0, -466)
     noteHelp:SetPoint("RIGHT", right, "RIGHT", 0, 0)
     noteHelp:SetWordWrap(true)
     noteHelp:SetText("With one of these on, the times of your plans are replaced by your lines in the note during the " ..

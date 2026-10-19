@@ -88,6 +88,81 @@ function ns:IsOnCooldownForReminder(reminder, timeLeft)
     return left ~= nil and left > math.max(0, timeLeft) + (reminder.offset or 0) + GRACE
 end
 
+--The cooldown of a plan entry's spell, for planning: { spellId, duration, charges, seen }. A spell with charges goes by
+--its recharge time. The cooldown seen in the game counts the player's talents; without it the spell's base cooldown is
+--used and seen is false. Nil when the entry has no cooldown worth checking
+function ns:EntryCooldown(specKey, entry)
+    local spellId
+    local ramp = ns:FindRamp(specKey, entry)
+    if ramp then
+        spellId = ramp.spellId
+    else
+        local trinket = ns:FindTrinket(entry)
+        if trinket then
+            spellId = trinket.spellId
+        else
+            local info = C_Spell.GetSpellInfo(tonumber(entry) or entry)
+            spellId = info and info.spellID
+        end
+    end
+    if not spellId then
+        return nil
+    end
+    ns:RememberCharges(spellId, C_Spell.GetSpellCharges(spellId))
+    local charges = ns.maxCharges[spellId] or 1
+    local duration, seen
+    if charges > 1 then
+        duration, seen = ns.rechargeTimes[spellId], ns.rechargeTimes[spellId] ~= nil
+    else
+        duration, seen = ns.db.cooldowns[spellId], ns.db.cooldowns[spellId] ~= nil
+    end
+    if not duration and GetSpellBaseCooldown then
+        local milliseconds = GetSpellBaseCooldown(spellId)
+        if milliseconds and not ns:IsSecret(milliseconds) and milliseconds > GCD_LIMIT * 1000 then
+            duration = milliseconds / 1000
+        end
+    end
+    if not duration or duration <= GCD_LIMIT then
+        return nil
+    end
+    return { spellId = spellId, duration = duration, charges = charges, seen = seen }
+end
+
+--Marks the uses of spells that won't be ready in time. uses are { entry, at } in any order; a use that isn't ready gets
+--conflict = { readyAt, cooldown } and doesn't use the spell up, since it can't be cast
+function ns:FindCooldownConflicts(specKey, uses)
+    local cooldowns, bySpell = {}, {}
+    for _, use in ipairs(uses) do
+        if cooldowns[use.entry] == nil then
+            cooldowns[use.entry] = ns:EntryCooldown(specKey, use.entry) or false
+        end
+        local cooldown = cooldowns[use.entry]
+        if cooldown then
+            bySpell[cooldown.spellId] = bySpell[cooldown.spellId] or { cooldown = cooldown, uses = {} }
+            table.insert(bySpell[cooldown.spellId].uses, use)
+        end
+    end
+    local conflicts = 0
+    for _, spell in pairs(bySpell) do
+        table.sort(spell.uses, function(a, b) return a.at < b.at end)
+        --When each charge is back, a charge recharging after the one before it
+        local ready = {}
+        for index = 1, spell.cooldown.charges do
+            ready[index] = -math.huge
+        end
+        for _, use in ipairs(spell.uses) do
+            table.sort(ready)
+            if ready[1] <= use.at + GRACE then
+                ready[1] = math.max(use.at, ready[#ready] > use.at and ready[#ready] or use.at) + spell.cooldown.duration
+            else
+                use.conflict = { readyAt = ready[1], cooldown = spell.cooldown }
+                conflicts = conflicts + 1
+            end
+        end
+    end
+    return conflicts
+end
+
 --Shows a reminder that is due, unless it is left out because its spell or trinket is on cooldown
 function ns:Remind(reminder, timeLeft)
     reminder.shown = true
