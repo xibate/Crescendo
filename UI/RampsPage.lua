@@ -241,9 +241,9 @@ function Refresh()
     end
 end
 
-ns:RegisterPage('ramps', "Ramps", 2, Build, function()
+ns:RegisterPage('ramps', "Ramps", 3, Build, function()
     Refresh()
-end)
+end, { icon = 'rail-ramps' })
 
 --For tests
 function ns:GetRampsPageWidgets()

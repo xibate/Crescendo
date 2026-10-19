@@ -200,9 +200,9 @@ local function Build(frame)
     end
 end
 
-ns:RegisterPage('display', "Display", 3, Build, function()
+ns:RegisterPage('display', "Display", 4, Build, function()
     page.Refresh()
-end)
+end, { icon = 'rail-display' })
 
 --For tests
 function ns:GetDisplayPageWidgets()

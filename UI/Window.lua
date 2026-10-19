@@ -1,19 +1,24 @@
 local _, ns = ...
 
---The addon's window (/cres): a header with the pages (Plans, Ramps, Display) and a page below it. Pages register with
---ns:RegisterPage and are built the first time they show
+--The addon's window (/cres): a rail on the left with the pages (Plans, Timeline, Ramps, Display, General), a header
+--bar along the top and the page below it. Plans and Timeline share the header's raid, boss, difficulty and spec, the
+--other pages show their name there. Pages register with ns:RegisterPage and are built the first time they show
 
 local theme = ns.theme
-local WIDTH, HEIGHT = 960, 600
-local HEADER = 48
+local WIDTH, HEIGHT = 1024, 680
+local RAIL = 64
+local HEADER = 50
 ns.windowPadding = 14
 
 local window
 local pages = {}
 
---build(frame) creates the page in its frame, refresh() redraws it from the saved settings
-function ns:RegisterPage(key, title, order, build, refresh)
-    table.insert(pages, { key = key, title = title, order = order, build = build, refresh = refresh })
+--build(frame) creates the page in its frame, refresh() redraws it from the saved settings. info.icon is the rail's icon
+--in Media, info.bossBar shows the raid, boss, difficulty and spec in the header
+function ns:RegisterPage(key, title, order, build, refresh, info)
+    info = info or {}
+    table.insert(pages, { key = key, title = title, order = order, build = build, refresh = refresh, icon = info.icon,
+        bossBar = info.bossBar })
     table.sort(pages, function(a, b) return a.order < b.order end)
 end
 
@@ -33,8 +38,11 @@ local function UpdateNav()
     local r, g, b = ns:GetAccent()
     for _, button in ipairs(window.nav) do
         local active = button.key == UI().page
-        button.label:SetTextColor(1, 1, 1, active and 1 or 0.5)
-        button.underline:SetColorTexture(r, g, b, active and 1 or 0)
+        local alpha = active and 1 or (button.hover and 0.85 or 0.5)
+        button.label:SetTextColor(1, 1, 1, alpha)
+        button.icon:SetVertexColor(1, 1, 1, alpha)
+        button.bar:SetColorTexture(r, g, b, active and 1 or 0)
+        button.background:SetColorTexture(1, 1, 1, active and 0.05 or (button.hover and 0.03 or 0))
     end
 end
 
@@ -69,6 +77,110 @@ function ns:SetPageTestHandler(key, handler)
     PageInfo(key).onTestChanged = handler
 end
 
+--The header bar of Plans and Timeline: Raid / Boss, difficulty and spec
+local function Selection()
+    local ui = UI()
+    if not ns.bosses[ui.boss or 0] then
+        ui.boss = ns.raids[1].bosses[1].encounterId
+    end
+    if not ns.difficulties[ui.difficulty or 0] then
+        ui.difficulty = 16
+    end
+    return ui.boss, ns.bosses[ui.boss]
+end
+
+local function SelectBoss(encounterId)
+    local ui = UI()
+    if ui.boss ~= encounterId then
+        ui.boss, ui.ability, ui.abilityScope, ui.timelineCast = encounterId, nil, nil, nil
+    end
+    ns:RefreshWindow()
+end
+
+local function BuildBossBar(parent)
+    local bar = CreateFrame("Frame", nil, parent)
+    bar:SetHeight(HEADER)
+    bar.raid = ns:Dropdown(bar, 160, 28, function() return select(2, Selection()).raid end, function()
+        local items = { { text = "Raids", header = true } }
+        for _, raid in ipairs(ns.raids) do
+            table.insert(items, { text = raid.name, value = raid.name })
+        end
+        return items
+    end, function(raidName)
+        for _, raid in ipairs(ns.raids) do
+            if raid.name == raidName and ns.bosses[UI().boss].raid ~= raidName then
+                SelectBoss(raid.bosses[1].encounterId)
+            end
+        end
+    end, 'plain')
+    bar.raid:SetPoint("LEFT", 0, 0)
+    bar.raid.label:SetTextColor(1, 1, 1, 0.6)
+    local slash = ns:Text(bar, 13, theme.section)
+    slash:SetPoint("LEFT", bar.raid, "RIGHT", 4, 0)
+    slash:SetText("/")
+    bar.boss = ns:Dropdown(bar, 170, 30, function() return select(2, Selection()).name end, function()
+        local _, boss = Selection()
+        local items = {}
+        for _, raid in ipairs(ns.raids) do
+            if raid.name == boss.raid then
+                table.insert(items, { text = raid.name, header = true })
+                for _, raidBoss in ipairs(raid.bosses) do
+                    table.insert(items, { text = raidBoss.name, value = raidBoss.encounterId })
+                end
+            end
+        end
+        return items
+    end, SelectBoss)
+    bar.boss:SetPoint("LEFT", slash, "RIGHT", 8, 0)
+    bar.boss.label:SetFont(ns:GetFont(), 13, "")
+    bar.difficulty = ns:Segmented(bar, {
+        { text = ns.difficulties[15].name, value = 15 },
+        { text = ns.difficulties[16].name, value = 16 }
+    }, 112, 28, function() return UI().difficulty end, function(diffId)
+        UI().difficulty = diffId
+        ns:RefreshWindow()
+    end)
+    bar.difficulty:SetPoint("LEFT", bar.boss, "RIGHT", 10, 0)
+    bar.spec = ns:Dropdown(bar, 140, 28, function() return ns.specNames[ns:SelectedSpec()] end,
+        function() return ns:SpecMenuItems() end, function(specKey)
+            UI().spec = specKey
+            UI().ability = nil
+            ns:RefreshWindow()
+        end)
+    bar.spec:SetPoint("LEFT", bar.difficulty, "RIGHT", 10, 0)
+    function bar:Refresh()
+        Selection()
+        self.raid:Refresh()
+        self.boss:Refresh()
+        self.difficulty:Refresh()
+        self.spec:Refresh()
+    end
+    return bar
+end
+
+local function NavButton(parent, page, y)
+    local button = CreateFrame("Button", nil, parent)
+    button:SetSize(RAIL, 56)
+    button:SetPoint("TOPLEFT", 0, y)
+    button.background = ns:Fill(button, { 1, 1, 1, 0 })
+    button.bar = button:CreateTexture(nil, "ARTWORK")
+    button.bar:SetWidth(2)
+    button.bar:SetPoint("TOPLEFT")
+    button.bar:SetPoint("BOTTOMLEFT")
+    button.icon = button:CreateTexture(nil, "ARTWORK")
+    button.icon:SetSize(22, 22)
+    button.icon:SetPoint("TOP", 0, -9)
+    button.icon:SetTexture("Interface/Addons/Crescendo/Media/" .. (page.icon or "rail-plans"))
+    button.label = ns:Text(button, 10, theme.text, "CENTER")
+    button.label:SetPoint("BOTTOM", 0, 8)
+    button.label:SetText(page.title)
+    button.key = page.key
+    button:SetScript("OnClick", function() ns:ShowPage(page.key) end)
+    button:SetScript("OnEnter", function(self) self.hover = true UpdateNav() end)
+    button:SetScript("OnLeave", function(self) self.hover = false UpdateNav() end)
+    return button
+end
+
 local function CreateWindow()
     local frame = CreateFrame("Frame", "CrescendoWindow", UIParent)
     frame:SetSize(WIDTH, HEIGHT)
@@ -92,48 +204,65 @@ local function CreateWindow()
     ns:Border(frame, theme.border)
     window = { frame = frame, nav = {}, pageFrames = {} }
 
-    local title = ns:Text(frame, 15)
-    title:SetPoint("TOPLEFT", 16, -16)
-    title:SetText("Crescendo")
-    title:SetTextColor(ns:GetAccent())
-
-    local x = 190
+    --The rail: the logo and a button per page
+    local rail = CreateFrame("Frame", nil, frame)
+    rail:SetPoint("TOPLEFT", 1, -1)
+    rail:SetPoint("BOTTOMLEFT", 1, 1)
+    rail:SetWidth(RAIL)
+    ns:Fill(rail, { 0, 0, 0, 0.25 })
+    local edge = rail:CreateTexture(nil, "BORDER")
+    edge:SetWidth(1)
+    edge:SetPoint("TOPRIGHT")
+    edge:SetPoint("BOTTOMRIGHT")
+    edge:SetColorTexture(1, 1, 1, 0.08)
+    local logo = rail:CreateTexture(nil, "ARTWORK")
+    logo:SetSize(30, 30)
+    logo:SetPoint("TOP", 0, -12)
+    logo:SetTexture("Interface/Addons/Crescendo/Media/logo")
+    window.rail = rail
+    local y = -54
     for _, page in ipairs(pages) do
-        local button = CreateFrame("Button", nil, frame)
-        button:SetSize(90, HEADER - 2)
-        button:SetPoint("TOPLEFT", x, 0)
-        button.label = ns:Text(button, 13, theme.text, "CENTER")
-        button.label:SetPoint("CENTER", 0, 0)
-        button.label:SetText(page.title)
-        button.underline = button:CreateTexture(nil, "ARTWORK")
-        button.underline:SetHeight(2)
-        button.underline:SetPoint("BOTTOMLEFT", 12, 0)
-        button.underline:SetPoint("BOTTOMRIGHT", -12, 0)
-        button.key = page.key
-        button:SetScript("OnClick", function() ns:ShowPage(page.key) end)
-        button:SetScript("OnEnter", function(self) if self.key ~= UI().page then self.label:SetTextColor(1, 1, 1, 0.8) end end)
-        button:SetScript("OnLeave", UpdateNav)
-        table.insert(window.nav, button)
-        x = x + 94
+        table.insert(window.nav, NavButton(rail, page, y))
+        y = y - 58
     end
 
-    local close = ns:Button(frame, "x", 24, 24, function() frame:Hide() end)
-    close:SetPoint("TOPRIGHT", -12, -12)
-    window.stopTest = ns:Button(frame, "Stop test", 84, 24, function() ns:StopTest() end, true)
+    --The header: the boss bar or the page's name, and on the right the test that runs and the close button
+    local header = CreateFrame("Frame", nil, frame)
+    header:SetPoint("TOPLEFT", RAIL + 1, 0)
+    header:SetPoint("TOPRIGHT", 0, 0)
+    header:SetHeight(HEADER)
+    window.header = header
+    window.title = ns:Text(header, 15)
+    window.title:SetPoint("LEFT", 16, 0)
+    window.bossBar = BuildBossBar(header)
+    window.bossBar:SetPoint("LEFT", 10, 0)
+    window.bossBar:SetPoint("RIGHT", header, "RIGHT", -300, 0)
+
+    local close = ns:Button(header, "x", 24, 24, function() frame:Hide() end)
+    close:SetPoint("RIGHT", -12, 0)
+    window.stopTest = ns:Button(header, "Stop test", 84, 24, function() ns:StopTest() end, true)
     window.stopTest:SetPoint("RIGHT", close, "LEFT", -8, 0)
-    window.testStatus = ns:Text(frame, 11, theme.dim, "RIGHT")
+    window.testStatus = ns:Text(header, 11, theme.dim, "RIGHT")
     window.testStatus:SetPoint("RIGHT", window.stopTest, "LEFT", -10, 0)
+    window.testStatus:SetWidth(180)
 
     local rule = frame:CreateTexture(nil, "ARTWORK")
     rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 1, -HEADER)
+    rule:SetPoint("TOPLEFT", RAIL + 1, -HEADER)
     rule:SetPoint("TOPRIGHT", -1, -HEADER)
     rule:SetColorTexture(1, 1, 1, 0.08)
 
     window.content = CreateFrame("Frame", nil, frame)
-    window.content:SetPoint("TOPLEFT", ns.windowPadding, -HEADER - 12)
+    window.content:SetPoint("TOPLEFT", RAIL + 1 + ns.windowPadding, -HEADER - 12)
     window.content:SetPoint("BOTTOMRIGHT", -ns.windowPadding, ns.windowPadding)
     ns:RefreshTestStatus()
+end
+
+--The header bar's raid, boss, difficulty and spec, after they changed somewhere else
+function ns:RefreshBossBar()
+    if window then
+        window.bossBar:Refresh()
+    end
 end
 
 function ns:ShowPage(key)
@@ -147,6 +276,12 @@ function ns:ShowPage(key)
         pageFrame:SetAllPoints()
         window.pageFrames[page.key] = pageFrame
         page.build(pageFrame)
+    end
+    window.bossBar:SetShown(page.bossBar == true)
+    window.title:SetShown(not page.bossBar)
+    window.title:SetText(page.title)
+    if page.bossBar then
+        window.bossBar:Refresh()
     end
     UpdateNav()
     ns:CloseMenu()
@@ -185,16 +320,12 @@ function ns:SelectCurrentBoss()
     end
     local ui = UI()
     if ui.boss ~= boss then
-        ui.boss, ui.ability, ui.abilityScope = boss, nil, nil
+        ui.boss, ui.ability, ui.abilityScope, ui.timelineCast = boss, nil, nil, nil
     end
     if ns.difficulties[difficultyId] then
         ui.difficulty = difficultyId
     end
     ui.spec = ns:GetPlayerSpecKey() or ui.spec
-    --Unfold the boss's raid
-    if ui.foldedRaids then
-        ui.foldedRaids[ns.bosses[boss].raid] = false
-    end
 end
 
 function ns:ToggleWindow(key)
@@ -208,7 +339,11 @@ end
 --Redraws the page that shows, after something changed outside it
 function ns:RefreshWindow()
     if window and window.frame:IsShown() then
-        PageInfo(UI().page).refresh()
+        local page = PageInfo(UI().page)
+        if page.bossBar then
+            window.bossBar:Refresh()
+        end
+        page.refresh()
     end
 end
 
@@ -242,7 +377,7 @@ function Crescendo_OnAddonCompartmentClick()
     ns:ToggleWindow()
 end
 
---/cres opens the window, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres review shows the
+--/cres opens the window, /cres timeline, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres review shows the
 --last pull's review, /cres phase 2 starts stage 2 without a boss mod and /cres stop stops a test
 function ns:SetUpCommands()
     AddSettingsEntry()

@@ -104,7 +104,8 @@ function ns:SectionLabel(parent, label)
     return text
 end
 
---A flat button with a faint border that lights up on hover. 'accent' gives it the accent colour
+--A flat button with a faint border that lights up on hover. 'accent' gives it the accent colour, 'plain' no fill or
+--border until it is hovered
 function ns:Button(parent, label, width, height, onClick, accent)
     local button = CreateFrame("Button", nil, parent)
     button:SetSize(width, height or 24)
@@ -114,7 +115,10 @@ function ns:Button(parent, label, width, height, onClick, accent)
     button.label:SetPoint("CENTER")
     button.label:SetText(label)
     local function Paint(hover)
-        if accent then
+        if accent == 'plain' then
+            background:SetColorTexture(1, 1, 1, hover and 0.06 or 0)
+            setBorder(1, 1, 1, 0)
+        elseif accent then
             local r, g, b = ns:GetAccent()
             background:SetColorTexture(r, g, b, hover and 0.32 or 0.2)
             setBorder(r, g, b, hover and 0.9 or 0.6)
@@ -422,9 +426,9 @@ function ns:Segmented(parent, items, width, height, get, set)
 end
 
 --A button showing the current choice that opens a menu of choices. getText() gives the label, getItems() the menu items
---(see ns:OpenMenu) and onSelect(value) runs on a choice
-function ns:Dropdown(parent, width, height, getText, getItems, onSelect)
-    local dropdown = ns:Button(parent, "", width, height)
+--(see ns:OpenMenu) and onSelect(value) runs on a choice. style is passed on to ns:Button
+function ns:Dropdown(parent, width, height, getText, getItems, onSelect, style)
+    local dropdown = ns:Button(parent, "", width, height, nil, style)
     dropdown.label:ClearAllPoints()
     dropdown.label:SetPoint("LEFT", 10, 0)
     dropdown.label:SetPoint("RIGHT", -24, 0)
@@ -626,6 +630,42 @@ function ns:TextArea(parent, onChange)
     well:SetScript("OnMouseDown", function() box:SetFocus() end)
     well.box = box
     return well
+end
+
+--A tab like a small bordered label, filled with the accent colour when selected. SetSelected shows which it is
+function ns:Chip(parent, label, onClick)
+    local chip = CreateFrame("Button", nil, parent)
+    chip:SetHeight(24)
+    chip.fill = ns:Fill(chip, { 1, 1, 1, 0 })
+    chip.setBorder = ns:Border(chip, theme.border)
+    chip.label = ns:Text(chip, 11, theme.dim, "CENTER")
+    chip.label:SetPoint("CENTER")
+    function chip:SetLabel(text)
+        self.label:SetText(text)
+        self:SetWidth(math.floor((self.label:GetStringWidth() or 40) + 24))
+    end
+    local function Paint(hover)
+        local r, g, b = ns:GetAccent()
+        if chip.selected then
+            chip.fill:SetColorTexture(r, g, b, 0.9)
+            chip.setBorder(r, g, b, 0.9)
+            chip.label:SetTextColor(0.05, 0.05, 0.05, 1)
+        else
+            chip.fill:SetColorTexture(1, 1, 1, hover and 0.05 or 0)
+            chip.setBorder(1, 1, 1, hover and 0.3 or 0.12)
+            chip.label:SetTextColor(1, 1, 1, hover and 0.9 or 0.6)
+        end
+    end
+    function chip:SetSelected(selected)
+        self.selected = selected
+        Paint(false)
+    end
+    chip:SetScript("OnEnter", function() Paint(true) end)
+    chip:SetScript("OnLeave", function() Paint(false) end)
+    chip:SetScript("OnClick", function(self) if onClick then onClick(self) end end)
+    chip:SetLabel(label or '')
+    chip:SetSelected(false)
+    return chip
 end
 
 --A section heading that folds the rows under it away when clicked, with + or - in front. SetFolded shows which it is

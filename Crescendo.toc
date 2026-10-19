@@ -1,5 +1,5 @@
 ## Interface: 120100, 120105
-## Version: 3.3.0
+## Version: 3.4.0
 ## Title: Crescendo
 ## IconTexture: Interface/Addons/Crescendo/Media/logo
 ## Notes: Plans and reminders for healer ramps and cooldowns in raid
@@ -35,6 +35,7 @@ UI\Display.lua
 UI\NextUp.lua
 UI\Window.lua
 UI\Planner.lua
+UI\TimelinePage.lua
 UI\RampsPage.lua
 UI\DisplayPage.lua
 UI\GeneralPage.lua

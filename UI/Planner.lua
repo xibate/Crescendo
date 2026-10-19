@@ -1,14 +1,15 @@
 local _, ns = ...
 
---The Plans page: pick a spec, difficulty and boss on the left, one of the boss's abilities in the middle, and assign
---ramps or spells to it on the right, for every cast or chosen casts, landing a number of seconds before the ability.
---Assignments are saved as ability lines in the boss's plan, which the Plan text tab shows in full
+--The Plans page: the boss's abilities on the left, with a tab for every stage, and on the right the selected ability's
+--assignments: ramps or spells for every cast or chosen casts, landing a number of seconds before the ability. The raid,
+--boss, difficulty and spec are picked in the window's header. Assignments are saved as ability lines in the boss's
+--plan, which Plan text shows in full and Share sends to others. The Timeline page edits the same assignments
 
 local theme = ns.theme
-local LEFT_X, LEFT_W = 0, 196
-local MID_X, MID_W = 210, 276
-local RIGHT_X = 500
-local RIGHT_W = 432
+local LIST_W = 260
+local RIGHT_X = 274
+local TABS_H = 36
+local BOTTOM_H = 40
 local ROW_H = 26
 local QUESTION_MARK = 134400
 
@@ -234,7 +235,7 @@ local function AssignmentTooltip(tooltip, assignment, append)
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Left: spec, difficulty, boss and test
+-- Testing one cast
 ------------------------------------------------------------------------------------------------------------------------
 
 local Refresh
@@ -242,148 +243,14 @@ local ConflictTooltip
 local CopyMenuItems, CopyPlanTo, HistoryMenuItems
 local NotReadyCasts
 
-local function Column(page, x, width)
-    local column = CreateFrame("Frame", nil, page)
-    column:SetPoint("TOPLEFT", x, 0)
-    column:SetPoint("BOTTOMLEFT", x, 0)
-    column:SetWidth(width)
-    return column
-end
-
-local function BuildLeft(page)
-    local left = Column(page, LEFT_X, LEFT_W)
-    ns:SectionLabel(left, "Spec"):SetPoint("TOPLEFT", 0, 0)
-    planner.specButton = ns:Dropdown(left, LEFT_W, 26, function() return ns.specNames[ns:SelectedSpec()] end,
-        function() return ns:SpecMenuItems() end, function(specKey)
-            UI().spec = specKey
-            UI().ability = nil
-            Refresh()
-        end)
-    planner.specButton:SetPoint("TOPLEFT", 0, -16)
-
-    ns:SectionLabel(left, "Difficulty"):SetPoint("TOPLEFT", 0, -56)
-    planner.difficulty = ns:Segmented(left, {
-        { text = ns.difficulties[15].name, value = 15 },
-        { text = ns.difficulties[16].name, value = 16 }
-    }, LEFT_W, 26, function() return UI().difficulty end, function(diffId)
-        UI().difficulty = diffId
-        Refresh()
-    end)
-    planner.difficulty:SetPoint("TOPLEFT", 0, -72)
-
-    ns:SectionLabel(left, "Boss"):SetPoint("TOPLEFT", 0, -112)
-    planner.bossList = ns:ScrollList(left)
-    planner.bossList:SetPoint("TOPLEFT", 0, -128)
-    planner.bossList:SetPoint("BOTTOMRIGHT", 0, 112)
-    planner.bossRows = {}
-    planner.raidHeaders = {}
-    for index, raid in ipairs(ns.raids) do
-        local header = ns:FoldHeader(planner.bossList.content, 24)
-        header.label:SetText(raid.name:upper())
-        header.raid = raid
-        header:SetScript("OnClick", function()
-            local folded = UI().foldedRaids
-            folded[raid.name] = not header.folded
-            Refresh()
-        end)
-        planner.raidHeaders[index] = header
-        for _, boss in ipairs(raid.bosses) do
-            local row = ns:ListRow(planner.bossList.content, ROW_H)
-            row.label:SetPoint("LEFT", 20, 0)
-            row.label:SetPoint("RIGHT", -8, 0)
-            row.label:SetText(boss.name)
-            row.encounterId = boss.encounterId
-            row:SetScript("OnClick", function()
-                UI().boss = boss.encounterId
-                UI().ability = nil
-                Refresh()
-            end)
-            planner.bossRows[boss.encounterId] = row
-        end
-    end
-
-    planner.replay = ns:Button(left, "Replay pull", LEFT_W, 26, function()
-        if ns:IsTesting() then
-            ns:StopTest()
-            return
-        end
-        local specKey, diffSlug, boss = Selected()
-        ns:StartTest(specKey, diffSlug, boss)
-    end, true)
-    planner.replay:SetPoint("BOTTOMLEFT", 0, 0)
-    planner.recordingInfo = ns:Text(left, 10, theme.dim)
-    planner.recordingInfo:SetPoint("BOTTOMLEFT", planner.replay, "TOPLEFT", 0, 6)
-    planner.recordingInfo:SetPoint("RIGHT", left, "RIGHT", 0, 0)
-    planner.recordingInfo:SetWordWrap(true)
-    planner.recordingInfo:SetJustifyV("BOTTOM")
-    local testLabel = ns:SectionLabel(left, "Test")
-    testLabel:SetPoint("BOTTOMLEFT", planner.recordingInfo, "TOPLEFT", 0, 6)
-    local testHelp = ns:HelpIcon(left, "Testing a plan",
-        "Every pull of a boss with BigWigs or DBM is recorded: the stages and ability bars they showed. Replay pull runs the " ..
-        "longest recorded pull of the selected boss and difficulty again with your current plan, so its reminders show and " ..
-        "speak as they would in the raid. Nothing has to be pulled, it works anywhere, also while hitting a target dummy.\n\n" ..
-        "Without a recorded pull, test one ability with Test cast on the right.")
-    testHelp:SetPoint("LEFT", testLabel, "RIGHT", 6, 0)
-end
-
---Raids are folded and unfolded by clicking their name. A raid starts folded when Config/Bosses.lua says so
-local function RaidFolded(raid)
-    local folded = UI().foldedRaids
-    if folded[raid.name] == nil then
-        folded[raid.name] = raid.collapsed == true
-    end
-    return folded[raid.name]
-end
-
-local function RefreshBosses(selectedBoss)
-    UI().foldedRaids = UI().foldedRaids or {}
-    local list = planner.bossList
-    local y = 0
-    for index, raid in ipairs(ns.raids) do
-        local header = planner.raidHeaders[index]
-        local folded = RaidFolded(raid)
-        local hasSelected = ns.bosses[selectedBoss] and ns.bosses[selectedBoss].raid == raid.name
-        header:SetFolded(folded)
-        header:SetHighlighted(folded and hasSelected)
-        header:ClearAllPoints()
-        header:SetPoint("TOPLEFT", 0, y)
-        header:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
-        y = y - 24
-        for _, boss in ipairs(raid.bosses) do
-            local row = planner.bossRows[boss.encounterId]
-            row:SetSelected(boss.encounterId == selectedBoss)
-            row:SetShown(not folded)
-            if not folded then
-                row:ClearAllPoints()
-                row:SetPoint("TOPLEFT", 0, y)
-                row:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
-                y = y - ROW_H
-            end
-        end
-    end
-    list:SetContentHeight(-y)
-end
-
 local function RefreshTest()
-    local _, diffSlug, boss = Selected()
-    local recording = ns:GetRecording(boss, diffSlug)
-    local testing = ns:IsTesting()
-    if recording then
-        planner.recordingInfo:SetText("Recorded pull of " .. ns:FormatTime(recording.duration) .. " on " .. recording.date ..
-            ", replayed with this plan.")
-    else
-        planner.recordingInfo:SetText("No pull of this boss recorded yet. Pull it once with BigWigs or DBM to replay it here.")
-    end
-    planner.replay.label:SetText(testing and "Stop test" or "Replay pull")
-    planner.replay:SetAlpha((recording or testing) and 1 or 0.4)
-    planner.replay:SetEnabled(recording ~= nil or testing)
     if planner.testCast then
-        planner.testCast.label:SetText(testing and "Stop test" or "Test cast")
+        planner.testCast.label:SetText(ns:IsTesting() and "Stop test" or "Test cast")
     end
 end
 
 ------------------------------------------------------------------------------------------------------------------------
--- Middle: the boss's abilities, by stage or once for all stages
+-- Left: the boss's abilities, for every stage or one stage
 ------------------------------------------------------------------------------------------------------------------------
 
 local function StageName(boss, stage)
@@ -399,12 +266,41 @@ local function HasStages(boss)
     return ns.bossStages[boss] ~= nil
 end
 
---Which view the ability list shows: 'stage' lists abilities under each stage they happen in, 'all' lists them once
-local function AbilityView(boss)
-    if not HasStages(boss) then
-        return 'all'
+local function IsIntermission(stage)
+    local number = tonumber(stage)
+    return number ~= nil and number ~= math.floor(number)
+end
+
+--A stage's name on its tab: 'Stage 2', or 'Intermission' for one between stages, numbered when the boss has more
+local function ShortStageName(boss, stage)
+    if IsIntermission(stage) then
+        local count = 0
+        for _, info in ipairs(ns.bossStages[boss] or {}) do
+            if IsIntermission(ns:PhaseKey(info.stage)) then
+                count = count + 1
+            end
+        end
+        return count > 1 and ("Intermission " .. math.floor(tonumber(stage))) or "Intermission"
     end
-    return UI().abilityView == 'all' and 'all' or 'stage'
+    return "Stage " .. stage
+end
+
+--The selected stage tab: 'all' for every ability once, or one of the boss's stage keys
+local function StageTab(boss)
+    local tab = UI().stageTab
+    if tab and tab ~= 'all' then
+        for _, info in ipairs(ns.bossStages[boss] or {}) do
+            if ns:PhaseKey(info.stage) == tab then
+                return tab
+            end
+        end
+    end
+    return 'all'
+end
+
+--Which view the ability list shows: 'stage' lists the abilities of the stage tab, 'all' every ability once
+local function AbilityView(boss)
+    return StageTab(boss) == 'all' and 'all' or 'stage'
 end
 
 --The lines of the ability list: section labels { label } and abilities { ability, scope }, where scope is 'all' for
@@ -449,17 +345,11 @@ local function AbilityListLines(boss, abilities, planText)
         end
         return planned[AbilityKey(ability)] and planned[AbilityKey(ability)][stage]
     end
-    for _, info in ipairs(ns.bossStages[boss]) do
-        local stage = ns:PhaseKey(info.stage)
-        local labelled = false
-        for _, ability in ipairs(abilities) do
-            if InStage(ability, stage) then
-                if not labelled then
-                    table.insert(lines, { label = info.name })
-                    labelled = true
-                end
-                table.insert(lines, { ability = ability, scope = stage })
-            end
+    local stage = StageTab(boss)
+    table.insert(lines, { label = StageName(boss, stage) })
+    for _, ability in ipairs(abilities) do
+        if InStage(ability, stage) then
+            table.insert(lines, { ability = ability, scope = stage })
         end
     end
     local labelled = false
@@ -473,6 +363,25 @@ local function AbilityListLines(boss, abilities, planText)
         end
     end
     return lines
+end
+
+--The stages an ability happens in, on its row when nothing is assigned: '1, 3' or on a stage tab 'also 3'
+local function StageHint(boss, line)
+    local ability = line.ability
+    if not HasStages(boss) or not ability.phases then
+        return nil
+    end
+    local names = {}
+    for _, phase in ipairs(ability.phases) do
+        local key = ns:PhaseKey(phase)
+        if key ~= line.scope then
+            table.insert(names, IsIntermission(key) and "Int" or key)
+        end
+    end
+    if #names == 0 then
+        return nil
+    end
+    return (line.scope == 'all' and "" or "also ") .. table.concat(names, ", ")
 end
 
 --The selected line of the ability list, the first one when the selection isn't in the list
@@ -548,24 +457,71 @@ local function AbilityTooltip(tooltip, row)
     end
 end
 
-local function BuildMiddle(page)
-    local middle = Column(page, MID_X, MID_W)
-    ns:Fill(middle, theme.well)
-    ns:Border(middle, theme.border)
-    ns:SectionLabel(middle, "Boss abilities"):SetPoint("TOPLEFT", 10, -10)
-    local hint = ns:Text(middle, 10, theme.section, "RIGHT")
-    hint:SetPoint("TOPRIGHT", -10, -10)
-    hint:SetText("ASSIGNED")
-    planner.view = ns:Segmented(middle, {
-        { text = "By stage", value = 'stage', tooltip = "Abilities under each stage they happen in. Assignments made here only trigger in that stage." },
-        { text = "All stages", value = 'all', tooltip = "Every ability once. Assignments made here trigger in every stage." }
-    }, MID_W - 20, 22, function() return UI().abilityView == 'all' and 'all' or 'stage' end, function(view)
-        UI().abilityView = view
-        UI().abilityScope = view == 'all' and 'all' or nil
-        Refresh()
-    end)
-    planner.view:SetPoint("TOPLEFT", 10, -28)
-    local list = ns:ScrollList(middle)
+local function SetStageTab(tab)
+    UI().stageTab = tab
+    UI().abilityScope = tab
+    Refresh()
+end
+
+local function StageChip(index)
+    local chip = planner.stageTabs[index]
+    if not chip then
+        chip = ns:Chip(planner.tabsFrame, "", function(self) SetStageTab(self.value) end)
+        ns:Tooltip(chip, function(tooltip, self)
+            tooltip:SetText(self.title, 1, 1, 1)
+            tooltip:AddLine(self.help, 0.7, 0.7, 0.7, true)
+        end)
+        planner.stageTabs[index] = chip
+    end
+    return chip
+end
+
+--A tab for every stage over the list, with the stage's full name in its tooltip. Returns false for a boss without stages
+local function RefreshStageTabs(boss)
+    for _, chip in ipairs(planner.stageTabs) do
+        chip:Hide()
+    end
+    if not HasStages(boss) then
+        planner.tabsFrame:Hide()
+        return false
+    end
+    planner.tabsFrame:Show()
+    local current = StageTab(boss)
+    local tabs = { { value = 'all', text = "All stages", title = "All stages",
+        help = "Every ability once. Assignments made here trigger in every stage." } }
+    for _, info in ipairs(ns.bossStages[boss]) do
+        local key = ns:PhaseKey(info.stage)
+        table.insert(tabs, { value = key, text = ShortStageName(boss, key), title = info.name,
+            help = "The abilities of this stage. Assignments made here only trigger in this stage." })
+    end
+    local x = 0
+    for index, tab in ipairs(tabs) do
+        local chip = StageChip(index)
+        chip.value, chip.title, chip.help = tab.value, tab.title, tab.help
+        chip:SetLabel(tab.text)
+        chip:SetSelected(tab.value == current)
+        chip:ClearAllPoints()
+        chip:SetPoint("TOPLEFT", x, 0)
+        chip:Show()
+        x = x + chip:GetWidth() + 6
+    end
+    return true
+end
+
+local function BuildList(page)
+    planner.tabsFrame = CreateFrame("Frame", nil, page)
+    planner.tabsFrame:SetPoint("TOPLEFT", 0, 0)
+    planner.tabsFrame:SetPoint("TOPRIGHT", 0, 0)
+    planner.tabsFrame:SetHeight(24)
+    planner.stageTabs = {}
+
+    local well = CreateFrame("Frame", nil, page)
+    well:SetWidth(LIST_W)
+    ns:Fill(well, theme.well)
+    ns:Border(well, theme.border)
+    planner.listWell = well
+    local list = ns:ScrollList(well)
+    list:SetPoint("TOPLEFT", 1, -4)
     list:SetPoint("BOTTOMRIGHT", -1, 1)
     planner.abilityList = list
     planner.abilityRows = {}
@@ -583,9 +539,9 @@ local function AbilityRow(index)
     row.icon:SetPoint("LEFT", 10, 0)
     row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     row.label:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
-    row.label:SetPoint("RIGHT", -34, 0)
+    row.label:SetPoint("RIGHT", -62, 0)
     row.badge = ns:Text(row, 11, theme.text, "RIGHT")
-    row.badge:SetPoint("RIGHT", -12, 0)
+    row.badge:SetPoint("RIGHT", -10, 0)
     row:SetScript("OnClick", function(self)
         UI().ability = AbilityKey(self.ability)
         UI().abilityScope = self.scope
@@ -612,11 +568,6 @@ end
 local function RefreshAbilities(lines, selected, planText)
     local _, _, boss = Selected()
     local list = planner.abilityList
-    planner.view:SetShown(HasStages(boss))
-    planner.view:Refresh()
-    list:ClearAllPoints()
-    list:SetPoint("TOPLEFT", 1, HasStages(boss) and -56 or -28)
-    list:SetPoint("BOTTOMRIGHT", -1, 1)
     for _, row in ipairs(planner.abilityRows) do
         row:Hide()
     end
@@ -650,13 +601,19 @@ local function RefreshAbilities(lines, selected, planText)
             local name, icon = SpellNameAndIcon(line.ability.spellId, line.ability.name)
             row.label:SetText(name)
             row.icon:SetTexture(icon)
-            --What triggers on this line: its own assignments, and on a stage line those for every stage too
+            --What triggers on this line: its own assignments, and on a stage line those for every stage too. Without
+            --any, the other stages it happens in
             local count = #ns:GetAbilityAssignments(planText, line.ability, line.scope)
             if line.scope ~= 'all' then
                 count = count + #ns:GetAbilityAssignments(planText, line.ability, 'all')
             end
-            row.badge:SetText(count > 0 and tostring(count) or '')
-            row.badge:SetTextColor(Accent())
+            if count > 0 then
+                row.badge:SetText(tostring(count))
+                row.badge:SetTextColor(Accent())
+            else
+                row.badge:SetText(StageHint(boss, line) or '')
+                row.badge:SetTextColor(1, 1, 1, 0.41)
+            end
             row:ClearAllPoints()
             row:SetPoint("TOPLEFT", 0, y)
             row:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
@@ -732,13 +689,19 @@ local function IsCustomCasts(assignment)
     return true
 end
 
-local function SaveAssignments()
-    local _, _, boss = Selected()
-    if planner.ability then
-        local specKey, diffSlug = Selected()
+--Assignment cards are used here and on the Timeline page. A card edits one assignment of a group { ability, scope,
+--assignments }: the assignments of an ability for one stage or for every stage, which are saved together
+local function SaveGroup(group)
+    if group.ability then
+        local specKey, diffSlug, boss = Selected()
         ns:BackupPlan(specKey, diffSlug, boss, "Before editing assignments", 600)
-        SetPlanText(ns:SetAbilityAssignments(GetPlanText(), boss, planner.ability, planner.assignments, planner.scope))
+        SetPlanText(ns:SetAbilityAssignments(GetPlanText(), boss, group.ability, group.assignments, group.scope))
     end
+end
+
+--The cards of a scroll list. refresh(keepRows) redraws the page they are on, keeping assignments that aren't saved yet
+local function NewCardList(content, refresh)
+    return { content = content, cards = {}, refresh = refresh }
 end
 
 local function EntryMenuItems(specKey)
@@ -790,13 +753,13 @@ local function OpenEntryMenu(card)
     ns:OpenMenu(card.pick, EntryMenuItems(ns:SelectedSpec()), function(value)
         if value == OTHER then
             card.typing = true
-            Refresh(true)
+            card.list.refresh(true)
             card.entryBox:SetFocus()
             return
         end
         card.assignment.entry = value
-        SaveAssignments()
-        Refresh(true)
+        SaveGroup(card.group)
+        card.list.refresh(true)
     end)
 end
 
@@ -804,25 +767,42 @@ local function Capitalized(text)
     return (text:gsub('^%l', string.upper))
 end
 
-local function AssignmentCard(index)
-    local card = planner.cards[index]
+local function AssignmentCard(list, index)
+    local card = list.cards[index]
     if card then
         return card
     end
-    card = CreateFrame("Frame", nil, planner.assignmentList.content)
+    card = CreateFrame("Frame", nil, list.content)
+    card.list = list
     card:SetHeight(CARD_H - 8)
     ns:Fill(card, { 1, 1, 1, 0.03 })
-    ns:Border(card, theme.border)
+    card.setBorder = ns:Border(card, theme.border)
+    local function Save()
+        SaveGroup(card.group)
+        list.refresh(true)
+    end
 
     --What: the ramp, spell or trinket
     card.icon = card:CreateTexture(nil, "ARTWORK")
     card.icon:SetSize(28, 28)
     card.icon:SetPoint("TOPLEFT", 8, -8)
     card.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    card.delete = ns:Button(card, "x", 24, 24, function()
+        for slot, assignment in ipairs(card.group.assignments) do
+            if assignment == card.assignment then
+                table.remove(card.group.assignments, slot)
+                break
+            end
+        end
+        Save()
+    end)
+    card.delete:SetPoint("TOPRIGHT", -8, -10)
+    ns:Tooltip(card.delete, "Remove this assignment")
     card.pick = ns:Dropdown(card, 300, 28, function() return card.assignment and card.assignment.entry or '' end,
         function() return {} end, function() end)
     card.pick:SetScript("OnClick", function() OpenEntryMenu(card) end)
     card.pick:SetPoint("LEFT", card.icon, "RIGHT", 8, 0)
+    card.pick:SetPoint("RIGHT", card.delete, "LEFT", -8, 0)
     card.pick.placeholder = ns:Text(card.pick, 12, theme.section)
     card.pick.placeholder:SetPoint("LEFT", 10, 0)
     card.pick.placeholder:SetText("Choose what to cast...")
@@ -830,24 +810,17 @@ local function AssignmentCard(index)
     card.entryBox = ns:EditBox(card, 300, 28, function(text)
         card.assignment.entry = text:match('^%s*(.-)%s*$')
         card.typing = false
-        SaveAssignments()
-        Refresh(true)
+        Save()
     end)
     card.entryBox:SetPoint("LEFT", card.icon, "RIGHT", 8, 0)
+    card.entryBox:SetPoint("RIGHT", card.delete, "LEFT", -8, 0)
     card.entryBox:SetPlaceholder("spell name, item name or item:id")
     card.entryBox:HookScript("OnEditFocusLost", function()
         if card.typing then
             card.typing = false
-            Refresh(true)
+            list.refresh(true)
         end
     end)
-    card.delete = ns:Button(card, "x", 24, 24, function()
-        table.remove(planner.assignments, card.index)
-        SaveAssignments()
-        Refresh(true)
-    end)
-    card.delete:SetPoint("TOPRIGHT", -8, -10)
-    ns:Tooltip(card.delete, "Remove this assignment")
 
     --When: seconds before the ability, and which casts
     local lands = ns:Text(card, 11, theme.dim)
@@ -856,16 +829,14 @@ local function AssignmentCard(index)
     local function Adjust(delta)
         return function()
             card.assignment.before = (card.assignment.before or 0) + delta
-            SaveAssignments()
-            Refresh(true)
+            Save()
         end
     end
     card.minus = ns:Button(card, "-", 22, 24, Adjust(-1))
     card.minus:SetPoint("LEFT", lands, "RIGHT", 8, 0)
     card.before = ns:EditBox(card, 40, 24, function(text)
         card.assignment.before = tonumber(text) or 0
-        SaveAssignments()
-        Refresh(true)
+        Save()
     end)
     card.before:SetJustifyH("CENTER")
     card.before:SetTextInsets(2, 2, 0, 0)
@@ -887,22 +858,21 @@ local function AssignmentCard(index)
             local choice = CAST_CHOICES[index]
             if choice.custom then
                 card.customCasts = true
-                Refresh(true)
+                list.refresh(true)
                 card.castsBox:SetFocus()
                 return
             end
             card.customCasts = false
             card.assignment.casts, card.assignment.every, card.assignment.from = choice.casts, choice.every, choice.every and choice.from or nil
-            SaveAssignments()
-            Refresh(true)
+            Save()
         end)
     card.casts:SetPoint("LEFT", card.beforeText, "RIGHT", 8, 0)
     ns:Tooltip(card.casts, "Which casts", CASTS_HELP)
     card.castsBox = ns:EditBox(card, 54, 24, function(text)
         if SetCasts(card.assignment, text) then
-            SaveAssignments()
+            SaveGroup(card.group)
         end
-        Refresh(true)
+        list.refresh(true)
     end)
     card.castsBox:SetPoint("LEFT", card.casts, "RIGHT", 6, 0)
     card.castsBox:SetPlaceholder("2,4")
@@ -918,7 +888,7 @@ local function AssignmentCard(index)
     card.note:SetPoint("LEFT")
     card.note:SetPoint("RIGHT")
     ns:Tooltip(card.noteFrame, function(tooltip)
-        local timeline, append = planner.cardTimeline, false
+        local timeline, append = list.timeline, false
         for _, use in ipairs(timeline and timeline.uses or {}) do
             if use.conflict and use.entry == card.assignment.entry then
                 ConflictTooltip(tooltip, { use = use })
@@ -929,8 +899,64 @@ local function AssignmentCard(index)
         end
         return AssignmentTooltip(tooltip, card.assignment, append)
     end)
-    planner.cards[index] = card
+    list.cards[index] = card
     return card
+end
+
+--Forgets a list's half done cards: a ramp or spell being typed, casts being picked
+local function ResetCards(list)
+    for _, card in ipairs(list.cards) do
+        card.typing, card.customCasts = false, false
+    end
+end
+
+--Shows a card for each item { group, assignment, ability, scope, note } from y down in the list, and returns where the
+--cards end. note replaces the card's description, list.timeline (a recorded pull) finds casts it won't be ready for
+local function FillCards(list, items, y)
+    y = y or 0
+    for _, card in ipairs(list.cards) do
+        card:Hide()
+    end
+    for index, item in ipairs(items) do
+        local card = AssignmentCard(list, index)
+        local assignment = item.assignment
+        card.group, card.assignment = item.group, assignment
+        local hasEntry = assignment.entry and assignment.entry:find('%S')
+        card.pick:Refresh()
+        card.pick.placeholder:SetShown(not hasEntry)
+        card.pick:SetShown(not card.typing)
+        card.entryBox:SetShown(card.typing == true)
+        if card.typing then
+            card.entryBox:SetValue(assignment.entry or '')
+        end
+        card.icon:SetTexture(EntryIcon(assignment.entry))
+        card.before:SetValue(tostring(assignment.before or 0))
+        card.casts:Refresh()
+        local custom = card.customCasts or IsCustomCasts(assignment)
+        card.castsBox:SetShown(custom)
+        card.castsBox:SetValue(CastsBoxText(assignment))
+        local text, isError = DescribeAssignment(assignment)
+        local notReady = not isError and NotReadyCasts(assignment, item.ability, item.scope, list.timeline)
+        if notReady then
+            text, isError = "Not ready in time on " .. notReady .. "  ·  see the Timeline", true
+        elseif item.note and not isError then
+            text = item.note
+        end
+        card.note:SetText(text)
+        if isError then
+            card.note:SetTextColor(ErrorColor())
+            card.setBorder(ErrorColor(0.35))
+        else
+            card.note:SetTextColor(1, 1, 1, 0.53)
+            card.setBorder(1, 1, 1, 0.06)
+        end
+        card:ClearAllPoints()
+        card:SetPoint("TOPLEFT", 0, -y)
+        card:SetPoint("RIGHT", list.content, "RIGHT", 0, 0)
+        card:Show()
+        y = y + CARD_H
+    end
+    return y
 end
 
 local function TestCast()
@@ -953,6 +979,7 @@ local function AddAssignment()
     if not planner.ability then
         return
     end
+    UI().plannerTab = 'assignments'
     table.insert(planner.assignments, { before = 0, entry = '' })
     Refresh(true)
     local card = planner.cards[#planner.assignments]
@@ -967,36 +994,37 @@ local function BuildAssignmentsTab(panel)
     planner.assignmentsTab = tab
 
     planner.abilityIcon = tab:CreateTexture(nil, "ARTWORK")
-    planner.abilityIcon:SetSize(30, 30)
-    planner.abilityIcon:SetPoint("TOPLEFT", 0, -2)
+    planner.abilityIcon:SetSize(40, 40)
+    planner.abilityIcon:SetPoint("TOPLEFT", 0, 0)
     planner.abilityIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    planner.abilityName = ns:Text(tab, 15)
-    planner.abilityName:SetPoint("TOPLEFT", planner.abilityIcon, "TOPRIGHT", 10, -1)
+    planner.abilityName = ns:Text(tab, 18)
+    planner.abilityName:SetPoint("TOPLEFT", planner.abilityIcon, "TOPRIGHT", 12, -2)
     planner.abilityName:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
-    planner.abilityInfo = ns:Text(tab, 10, theme.dim)
-    planner.abilityInfo:SetPoint("BOTTOMLEFT", planner.abilityIcon, "BOTTOMRIGHT", 10, 1)
+    planner.abilityInfo = ns:Text(tab, 11, theme.dim)
+    planner.abilityInfo:SetPoint("BOTTOMLEFT", planner.abilityIcon, "BOTTOMRIGHT", 12, 2)
     planner.abilityInfo:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
 
     --On a stage, what is assigned for every stage triggers too
     planner.alsoAll = CreateFrame("Button", nil, tab)
-    planner.alsoAll:SetPoint("TOPLEFT", 0, -40)
+    planner.alsoAll:SetPoint("TOPLEFT", 0, -50)
     planner.alsoAll:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
     planner.alsoAll:SetHeight(16)
     planner.alsoAll.label = ns:Text(planner.alsoAll, 10, theme.dim)
     planner.alsoAll.label:SetPoint("LEFT")
     planner.alsoAll.label:SetPoint("RIGHT")
     planner.alsoAll:SetScript("OnClick", function()
-        UI().abilityView = 'all'
+        UI().stageTab = 'all'
         UI().abilityScope = 'all'
         Refresh()
     end)
-    ns:Tooltip(planner.alsoAll, "Assigned for every stage", "These trigger in every stage this ability happens in. Click to edit them in the All stages list.")
+    ns:Tooltip(planner.alsoAll, "Assigned for every stage", "These trigger in every stage this ability happens in. Click to edit them on the All stages tab.")
 
     local list = ns:ScrollList(tab)
-    list:SetPoint("TOPLEFT", 0, -60)
-    list:SetPoint("BOTTOMRIGHT", 0, 74)
+    list:SetPoint("TOPLEFT", 0, -72)
+    list:SetPoint("BOTTOMRIGHT", 0, 62)
     planner.assignmentList = list
-    planner.cards = {}
+    planner.cardList = NewCardList(list.content, function(keepRows) Refresh(keepRows) end)
+    planner.cards = planner.cardList.cards
 
     planner.empty = ns:Text(list.content, 12, theme.dim)
     planner.empty:SetPoint("TOPLEFT", 0, -4)
@@ -1004,18 +1032,17 @@ local function BuildAssignmentsTab(panel)
     planner.empty:SetWordWrap(true)
     planner.empty:SetJustifyV("TOP")
     planner.empty:SetHeight(64)
-    planner.addButton = ns:Button(list.content, "+ Add assignment", 160, 28, AddAssignment, true)
 
     --Testing one cast of the ability
     local rule = tab:CreateTexture(nil, "ARTWORK")
     rule:SetHeight(1)
-    rule:SetPoint("BOTTOMLEFT", 0, 66)
-    rule:SetPoint("BOTTOMRIGHT", 0, 66)
+    rule:SetPoint("BOTTOMLEFT", 0, 54)
+    rule:SetPoint("BOTTOMRIGHT", 0, 54)
     rule:SetColorTexture(1, 1, 1, 0.06)
     local testLabel = ns:SectionLabel(tab, "Test cast")
-    testLabel:SetPoint("BOTTOMLEFT", 0, 46)
+    testLabel:SetPoint("BOTTOMLEFT", 0, 36)
     local castText = ns:Text(tab, 11, theme.dim)
-    castText:SetPoint("BOTTOMLEFT", 0, 13)
+    castText:SetPoint("BOTTOMLEFT", 0, 6)
     castText:SetText("Cast")
     planner.testCount = ns:EditBox(tab, 40, 24)
     planner.testCount:SetPoint("LEFT", castText, "RIGHT", 6, 0)
@@ -1028,30 +1055,10 @@ local function BuildAssignmentsTab(panel)
     secondsText:SetPoint("LEFT", planner.testSeconds, "RIGHT", 6, 0)
     secondsText:SetText("seconds")
     planner.testCast = ns:Button(tab, "Test cast", 110, 26, TestCast, true)
-    planner.testCast:SetPoint("BOTTOMRIGHT", 0, 12)
+    planner.testCast:SetPoint("BOTTOMRIGHT", 0, 4)
     ns:Tooltip(planner.testCast, "Test cast",
         "Pretends your boss mod shows a bar for this cast of the ability, and shows the reminders of its assignments as they " ..
         "would come. Other lines of the plan are left out.")
-end
-
-------------------------------------------------------------------------------------------------------------------------
--- Right: the timeline of the recorded pull, with the plan's reminders
-------------------------------------------------------------------------------------------------------------------------
-
-local TIMELINE_ROW = { stage = 24, cast = 20, reminder = 18 }
-
---Opens the ability of a cast on the timeline in the Assignments tab, on its stage when the list is by stage
-local function OpenCast(cast)
-    local _, _, boss = Selected()
-    for _, ability in ipairs(ns:GetPlannerAbilities(boss, GetPlanText(), UI().difficulty == 15)) do
-        if (cast.spellId and ability.spellId == cast.spellId) or (ability.name and ability.name:lower() == cast.name:lower()) then
-            UI().ability = AbilityKey(ability)
-            UI().abilityScope = AbilityView(boss) == 'stage' and cast.stage or 'all'
-            UI().plannerTab = 'assignments'
-            Refresh()
-            return
-        end
-    end
 end
 
 --Why a use of a spell won't be ready, in the tooltip of its reminder
@@ -1063,230 +1070,6 @@ function ConflictTooltip(tooltip, reminder)
     local cooldown = conflict.cooldown
     tooltip:AddLine("Cooldown " .. ns:FormatTime(cooldown.duration) .. (cooldown.charges > 1 and (", " .. cooldown.charges .. " charges") or "") ..
         (cooldown.seen and "" or ", the spell's base cooldown: cast it once out of combat so the addon knows yours with your talents"), 0.7, 0.7, 0.7, true)
-end
-
-local function TimelineRow(index)
-    local row = planner.timelineRows[index]
-    if row then
-        return row
-    end
-    row = CreateFrame("Button", nil, planner.timelineList.content)
-    row.background = ns:Fill(row, { 1, 1, 1, 0 })
-    row.time = ns:Text(row, 10, theme.dim)
-    row.time:SetPoint("LEFT", 4, 0)
-    row.time:SetWidth(34)
-    row.icon = row:CreateTexture(nil, "ARTWORK")
-    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    row.label = ns:Text(row, 11)
-    row.label:SetPoint("RIGHT", -46, 0)
-    row.play = ns:Button(row, "Play", 38, 16, function()
-        local specKey, diffSlug, boss = Selected()
-        ns:StartTest(specKey, diffSlug, boss, nil, math.max(0, row.at - 5))
-    end)
-    row.play:SetPoint("RIGHT", -2, 0)
-    row.play.label:SetFont(ns:GetFont(), 9, "")
-    ns:Tooltip(row.play, "Replay from here", "Replays the recorded pull from 5 seconds before this, with your plan.")
-    row:SetScript("OnClick", function(self)
-        if self.cast then
-            OpenCast(self.cast)
-        end
-    end)
-    row:SetScript("OnEnter", function(self)
-        if self.cast then
-            self.background:SetColorTexture(1, 1, 1, 0.06)
-        end
-    end)
-    row:SetScript("OnLeave", function(self) self:Paint() end)
-    ns:Tooltip(row, function(tooltip, self)
-        if self.conflict then
-            return ConflictTooltip(tooltip, self.reminder)
-        end
-        if not self.cast then
-            return false
-        end
-        tooltip:SetText(self.cast.name .. (self.cast.count and (" (" .. self.cast.count .. ")") or ""), 1, 1, 1)
-        tooltip:AddLine("Goes off at " .. ns:FormatTime(self.cast.at), 0.7, 0.7, 0.7)
-        tooltip:AddLine(self.cast.assigned and "Click to see its assignments" or "Click to assign something to it", Accent())
-    end)
-    function row:Paint()
-        local r, g, b = ns:GetAccent()
-        if self.current then
-            self.background:SetColorTexture(r, g, b, 0.22)
-        elseif self.kind == 'stage' then
-            self.background:SetColorTexture(r, g, b, 0.1)
-        else
-            self.background:SetColorTexture(1, 1, 1, 0)
-        end
-    end
-    planner.timelineRows[index] = row
-    return row
-end
-
-local function BuildTimelineTab(panel)
-    local tab = CreateFrame("Frame", nil, panel)
-    tab:SetAllPoints()
-    planner.timelineTab = tab
-    planner.timelineInfo = ns:Text(tab, 11, theme.dim)
-    planner.timelineInfo:SetPoint("TOPLEFT", 0, -4)
-    planner.timelineInfo:SetPoint("RIGHT", tab, "RIGHT", -180, 0)
-    planner.timelineAssigned = ns:Checkbox(tab, "Only assigned abilities", function() return UI().timelineAssigned end, function(value)
-        UI().timelineAssigned = value or nil
-        Refresh()
-    end)
-    planner.timelineAssigned:SetWidth(170)
-    planner.timelineAssigned:SetPoint("TOPRIGHT", 0, 0)
-    local legend = ns:Text(tab, 10, theme.dim)
-    legend:SetPoint("TOPLEFT", 0, -24)
-    legend:SetPoint("RIGHT", tab, "RIGHT", 0, 0)
-    legend:SetText("Boss abilities in white, your reminders in green. Click an ability to assign to it, Play replays from there.")
-    local well = CreateFrame("Frame", nil, tab)
-    well:SetPoint("TOPLEFT", 0, -44)
-    well:SetPoint("BOTTOMRIGHT", 0, 0)
-    ns:Fill(well, theme.well)
-    ns:Border(well, theme.border)
-    planner.timelineList = ns:ScrollList(well)
-    planner.timelineList:SetPoint("TOPLEFT", 1, -1)
-    planner.timelineList:SetPoint("BOTTOMRIGHT", -1, 1)
-    planner.timelineRows = {}
-    planner.timelineEmpty = ns:Text(well, 12, theme.dim)
-    planner.timelineEmpty:SetPoint("TOPLEFT", 12, -12)
-    planner.timelineEmpty:SetPoint("RIGHT", well, "RIGHT", -12, 0)
-    planner.timelineEmpty:SetWordWrap(true)
-end
-
---The lines of the timeline in order: stage changes, boss casts and reminders. At the same time a stage comes first, then
---reminders, then the cast they lead up to
-local function TimelineLines(timeline, boss)
-    local lines = {}
-    for _, stage in ipairs(timeline.stages) do
-        if stage.at > 0 or stage.stage ~= '1' then
-            table.insert(lines, { kind = 'stage', at = stage.at, order = 0, text = ScopeText(boss, stage.stage) or ("Stage " .. stage.stage) })
-        end
-    end
-    for _, cast in ipairs(timeline.casts) do
-        if cast.assigned or not UI().timelineAssigned then
-            table.insert(lines, { kind = 'cast', at = cast.at, order = 2, cast = cast })
-        end
-    end
-    for _, reminder in ipairs(timeline.reminders) do
-        table.insert(lines, { kind = 'reminder', at = reminder.at, order = 1, reminder = reminder })
-    end
-    table.sort(lines, function(a, b)
-        if math.abs(a.at - b.at) > 0.05 then
-            return a.at < b.at
-        end
-        return a.order < b.order
-    end)
-    return lines
-end
-
-local function RefreshTimeline()
-    local specKey, diffSlug, boss = Selected()
-    local record = ns:GetRecording(boss, diffSlug)
-    for _, row in ipairs(planner.timelineRows) do
-        row:Hide()
-    end
-    planner.timelineLines = nil
-    if not record then
-        planner.timelineInfo:SetText("No recorded pull")
-        planner.timelineEmpty:SetText("No pull of " .. ns.bosses[boss].name .. " on " .. ns.difficulties[UI().difficulty].name ..
-            " recorded yet. Pull it once with BigWigs or DBM, and the timeline shows when each ability went off and when your reminders show.")
-        planner.timelineEmpty:Show()
-        planner.timelineList:SetContentHeight(1)
-        return
-    end
-    planner.timelineEmpty:Hide()
-    local timeline = ns:BuildTimeline(specKey, GetPlanText(), record, boss)
-    planner.timelineInfo:SetText("Recorded pull of " .. ns:FormatTime(record.duration) .. " on " .. record.date ..
-        (timeline.conflicts > 0 and ("  |cffff5a4d" .. timeline.conflicts .. " not ready in time|r") or ""))
-    local lines = TimelineLines(timeline, boss)
-    local r, g, b = ns:GetAccent()
-    local y = 0
-    for index, line in ipairs(lines) do
-        local row = TimelineRow(index)
-        row.kind, row.at, row.cast, row.current = line.kind, line.at, line.cast, false
-        row.reminder = line.reminder
-        row.conflict = line.reminder and line.reminder.use and line.reminder.use.conflict
-        local height = TIMELINE_ROW[line.kind]
-        row:SetHeight(height)
-        row:ClearAllPoints()
-        row:SetPoint("TOPLEFT", 0, y)
-        row:SetPoint("RIGHT", planner.timelineList.content, "RIGHT", 0, 0)
-        line.y = y
-        row.time:SetText(ns:FormatTime(line.at))
-        row.icon:ClearAllPoints()
-        row.label:ClearAllPoints()
-        row.label:SetPoint("RIGHT", -46, 0)
-        row.play:SetShown(line.kind ~= 'reminder')
-        if line.kind == 'stage' then
-            row.icon:Hide()
-            row.label:SetPoint("LEFT", row.time, "RIGHT", 6, 0)
-            row.label:SetText(line.text:upper())
-            row.label:SetTextColor(r, g, b, 1)
-            row.time:SetTextColor(r, g, b, 1)
-        elseif line.kind == 'cast' then
-            local cast = line.cast
-            local _, icon = SpellNameAndIcon(cast.spellId, cast.name)
-            row.icon:SetSize(16, 16)
-            row.icon:SetPoint("LEFT", row.time, "RIGHT", 6, 0)
-            row.icon:SetTexture(icon)
-            row.icon:Show()
-            row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-            row.label:SetText(cast.name .. (cast.count and (" (" .. cast.count .. ")") or ""))
-            row.label:SetTextColor(1, 1, 1, cast.assigned and 1 or 0.6)
-            row.time:SetTextColor(1, 1, 1, 0.53)
-        else
-            local reminder = line.reminder
-            row.icon:SetSize(14, 14)
-            row.icon:SetPoint("LEFT", row.time, "RIGHT", 18, 0)
-            row.icon:SetTexture(reminder.icon or QUESTION_MARK)
-            row.icon:Show()
-            row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-            row.label:SetText((row.conflict and "! " or "") .. (reminder.approximate and "~ " or "") .. reminder.text)
-            if row.conflict then
-                row.label:SetTextColor(ErrorColor())
-                row.time:SetTextColor(ErrorColor(0.8))
-            else
-                row.label:SetTextColor(r, g, b, 0.9)
-                row.time:SetTextColor(r, g, b, 0.7)
-            end
-        end
-        row:Paint()
-        row:Show()
-        y = y - height
-    end
-    planner.timelineLines = lines
-    planner.timelineList:SetContentHeight(-y + 4)
-end
-
---While a replay runs, the line it has reached is lit and kept in view
-local function UpdatePlayhead()
-    local lines = planner.timelineLines
-    if not lines or not planner.timelineTab:IsShown() then
-        return
-    end
-    local now = ns:IsTesting() and not ns.fight.test.ability and (GetTime() - ns.fight.start) or nil
-    local current
-    for index, line in ipairs(lines) do
-        if now and line.at <= now then
-            current = index
-        end
-    end
-    for index, row in ipairs(planner.timelineRows) do
-        if row:IsShown() then
-            row.current = index == current
-            row:Paint()
-        end
-    end
-    if current then
-        local list = planner.timelineList
-        local top = -lines[current].y
-        local visible = list:GetHeight() or 0
-        local scroll = list:GetVerticalScroll() or 0
-        if top < scroll or top > scroll + visible - 40 then
-            list:SetVerticalScroll(math.max(0, math.min(top - visible / 3, list:GetVerticalScrollRange() or 0)))
-        end
-    end
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -1587,45 +1370,51 @@ local function RefreshShare()
     end
 end
 
-local TABS = { { key = 'assignments', text = "Assignments" }, { key = 'plan', text = "Plan text" }, { key = 'note', text = "Share" },
-    { key = 'timeline', text = "Timeline" } }
+--Plan text and Share open in place of the assignments, from the buttons under them, and close with another click
+local function PanelButton(parent, label, width, key)
+    local button = ns:Button(parent, label, width, 28, function()
+        UI().plannerTab = UI().plannerTab == key and 'assignments' or key
+        Refresh()
+    end)
+    button.underline = button:CreateTexture(nil, "OVERLAY")
+    button.underline:SetHeight(2)
+    button.underline:SetPoint("BOTTOMLEFT", 1, 1)
+    button.underline:SetPoint("BOTTOMRIGHT", -1, 1)
+    button.key = key
+    return button
+end
 
 local function BuildRight(page)
-    local right = Column(page, RIGHT_X, RIGHT_W)
-    planner.tabButtons = {}
-    local x = 0
-    for _, info in ipairs(TABS) do
-        local button = CreateFrame("Button", nil, right)
-        button:SetSize(96, 24)
-        button:SetPoint("TOPLEFT", x, 0)
-        button.label = ns:Text(button, 12, theme.text, "LEFT")
-        button.label:SetPoint("LEFT", 0, 2)
-        button.label:SetText(info.text)
-        button.underline = button:CreateTexture(nil, "ARTWORK")
-        button.underline:SetHeight(2)
-        button.underline:SetPoint("BOTTOMLEFT")
-        button.underline:SetWidth(button.label:GetStringWidth() or 80)
-        button:SetScript("OnClick", function()
-            UI().plannerTab = info.key
-            Refresh()
-        end)
-        button.key = info.key
-        planner.tabButtons[info.key] = button
-        x = x + 106
-    end
+    local right = CreateFrame("Frame", nil, page)
+    planner.right = right
     local panel = CreateFrame("Frame", nil, right)
-    panel:SetPoint("TOPLEFT", 0, -36)
-    panel:SetPoint("BOTTOMRIGHT", 0, 0)
+    panel:SetPoint("TOPLEFT", 0, 0)
+    panel:SetPoint("BOTTOMRIGHT", 0, BOTTOM_H)
     BuildAssignmentsTab(panel)
     BuildPlanTextTab(panel)
     BuildNoteTab(panel)
-    BuildTimelineTab(panel)
+
+    local rule = right:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("BOTTOMLEFT", 0, BOTTOM_H - 6)
+    rule:SetPoint("BOTTOMRIGHT", 0, BOTTOM_H - 6)
+    rule:SetColorTexture(1, 1, 1, 0.06)
+    planner.addButton = ns:Button(right, "+ Add assignment", 150, 28, AddAssignment, true)
+    planner.addButton:SetPoint("BOTTOMLEFT", 0, 0)
+    planner.timelineButton = ns:Button(right, "Timeline", 84, 28, function() ns:ShowPage('timeline') end)
+    planner.timelineButton:SetPoint("BOTTOMRIGHT", 0, 0)
+    ns:Tooltip(planner.timelineButton, "Timeline", "The recorded pull of this boss: every cast of its abilities and your reminders. Also in the bar on the left.")
+    planner.shareButton = PanelButton(right, "Share", 74, 'note')
+    planner.shareButton:SetPoint("RIGHT", planner.timelineButton, "LEFT", -8, 0)
+    ns:Tooltip(planner.shareButton, "Share", "Send plans to other Crescendo users with a string, or take times from an MRT note.")
+    planner.planButton = PanelButton(right, "Plan text", 90, 'plan')
+    planner.planButton:SetPoint("RIGHT", planner.shareButton, "LEFT", -8, 0)
+    ns:Tooltip(planner.planButton, "Plan text", "The whole plan of this boss as text, to edit, copy to another boss or restore from history.")
 end
 
---The casts of an ability in the recorded pull on which an assignment's spell won't be ready, like 'cast 3 (02:10)'
-function NotReadyCasts(assignment, ability, scope)
-    local timeline = planner.cardTimeline
-    if not timeline then
+--The casts of an ability in a recorded pull's timeline on which an assignment's spell won't be ready, like 'cast 3 (02:10)'
+function NotReadyCasts(assignment, ability, scope, timeline)
+    if not timeline or not ability then
         return nil
     end
     local casts = {}
@@ -1649,20 +1438,17 @@ local function RefreshAssignments(line, keepRows)
             local first = planner.assignments[1]
             planner.testCount:SetValue(tostring(first and (first.casts and first.casts[1] or first.from) or 1))
             planner.testSeconds:SetValue(tostring(UI().testSeconds or 15))
-            for _, card in ipairs(planner.cards) do
-                card.typing, card.customCasts = false, false
-            end
+            ResetCards(planner.cardList)
         end
     end
     planner.ability, planner.scope = ability, scope
     local specKey, diffSlug = Selected()
     local record = ns:GetRecording(boss, diffSlug)
     planner.cardTimeline = record and ns:BuildTimeline(specKey, GetPlanText(), record, boss) or nil
-    for _, card in ipairs(planner.cards) do
-        card:Hide()
-    end
+    planner.cardList.timeline = planner.cardTimeline
     planner.alsoAll:Hide()
     if not ability then
+        FillCards(planner.cardList, {})
         planner.abilityName:SetText("No boss abilities")
         planner.abilityInfo:SetText("")
         planner.abilityIcon:SetTexture(QUESTION_MARK)
@@ -1671,6 +1457,7 @@ local function RefreshAssignments(line, keepRows)
         planner.addButton:Hide()
         return
     end
+    planner.addButton:Show()
     local name, icon = SpellNameAndIcon(ability.spellId, ability.name)
     planner.abilityName:SetText(name)
     planner.abilityIcon:SetTexture(icon)
@@ -1692,51 +1479,18 @@ local function RefreshAssignments(line, keepRows)
     local y = 0
     if #planner.assignments == 0 then
         planner.empty:SetText("Nothing assigned to " .. name .. (scope ~= 'all' and where and (" in " .. where) or "") .. " yet.\n" ..
-            "Add an assignment, choose what to cast, and how many seconds before " .. name .. " it should land.")
+            "Add an assignment below, choose what to cast, and how many seconds before " .. name .. " it should land.")
         planner.empty:Show()
-        y = -68
+        y = 68
     else
         planner.empty:Hide()
     end
-    for index, assignment in ipairs(planner.assignments) do
-        local card = AssignmentCard(index)
-        card.index = index
-        card.assignment = assignment
-        local hasEntry = assignment.entry and assignment.entry:find('%S')
-        card.pick:Refresh()
-        card.pick.placeholder:SetShown(not hasEntry)
-        card.pick:SetShown(not card.typing)
-        card.entryBox:SetShown(card.typing == true)
-        if card.typing then
-            card.entryBox:SetValue(assignment.entry or '')
-        end
-        card.icon:SetTexture(EntryIcon(assignment.entry))
-        card.before:SetValue(tostring(assignment.before or 0))
-        card.casts:Refresh()
-        local custom = card.customCasts or IsCustomCasts(assignment)
-        card.castsBox:SetShown(custom)
-        card.castsBox:SetValue(CastsBoxText(assignment))
-        local text, isError = DescribeAssignment(assignment)
-        local notReady = not isError and NotReadyCasts(assignment, ability, scope)
-        if notReady then
-            text, isError = "Not ready in time on " .. notReady .. "  ·  see the Timeline", true
-        end
-        card.note:SetText(text)
-        if isError then
-            card.note:SetTextColor(ErrorColor())
-        else
-            card.note:SetTextColor(1, 1, 1, 0.53)
-        end
-        card:ClearAllPoints()
-        card:SetPoint("TOPLEFT", 0, y)
-        card:SetPoint("RIGHT", planner.assignmentList.content, "RIGHT", 0, 0)
-        card:Show()
-        y = y - CARD_H
+    local items = {}
+    for _, assignment in ipairs(planner.assignments) do
+        table.insert(items, { group = planner, assignment = assignment, ability = ability, scope = scope })
     end
-    planner.addButton:ClearAllPoints()
-    planner.addButton:SetPoint("TOPLEFT", 0, y - 4)
-    planner.addButton:Show()
-    planner.assignmentList:SetContentHeight(-y + 40)
+    y = FillCards(planner.cardList, items, y)
+    planner.assignmentList:SetContentHeight(y + 8)
 end
 
 --Redraws the page from the saved settings. keepRows keeps the assignment cards of the ability as they are, so cards
@@ -1746,33 +1500,34 @@ function Refresh(keepRows)
         return
     end
     local specKey, _, boss = Selected()
+    ns:RefreshBossBar()
     local planText = GetPlanText()
-    planner.specButton:Refresh()
-    planner.difficulty:Refresh()
-    RefreshBosses(boss)
     RefreshTest()
+
+    local top = RefreshStageTabs(boss) and -TABS_H or 0
+    planner.listWell:ClearAllPoints()
+    planner.listWell:SetPoint("TOPLEFT", 0, top)
+    planner.listWell:SetPoint("BOTTOMLEFT", 0, 0)
+    planner.right:ClearAllPoints()
+    planner.right:SetPoint("TOPLEFT", RIGHT_X, top)
+    planner.right:SetPoint("BOTTOMRIGHT", 0, 0)
 
     local lines = AbilityListLines(boss, ns:GetPlannerAbilities(boss, planText, UI().difficulty == 15), planText)
     local selected = SelectedLine(lines)
     RefreshAbilities(lines, selected, planText)
 
     local tab = UI().plannerTab
-    if tab ~= 'plan' and tab ~= 'note' and tab ~= 'timeline' then
+    if tab ~= 'plan' and tab ~= 'note' then
         tab = 'assignments'
     end
-    for key, button in pairs(planner.tabButtons) do
-        local active = key == tab
-        button.label:SetTextColor(1, 1, 1, active and 1 or 0.5)
-        button.underline:SetColorTexture(Accent(active and 1 or 0))
+    for _, button in ipairs({ planner.planButton, planner.shareButton }) do
+        button.underline:SetColorTexture(Accent(button.key == tab and 1 or 0))
     end
     planner.assignmentsTab:SetShown(tab == 'assignments')
     planner.planTextTab:SetShown(tab == 'plan')
     planner.noteTab:SetShown(tab == 'note')
-    planner.timelineTab:SetShown(tab == 'timeline')
-    if tab == 'timeline' then
-        RefreshTimeline()
-        UpdatePlayhead()
-    elseif tab == 'plan' then
+    RefreshAssignments(selected, keepRows)
+    if tab == 'plan' then
         planner.planUndo:SetShown(planner.copyUndo ~= nil)
         if not planner.planBox:HasFocus() then
             planner.planBox:SetText(planText)
@@ -1781,23 +1536,42 @@ function Refresh(keepRows)
         end
     elseif tab == 'note' then
         RefreshShare()
-    else
-        RefreshAssignments(selected, keepRows)
     end
 end
 
 ns:RegisterPage('plans', "Plans", 1, function(page)
     planner = { page = page }
-    BuildLeft(page)
-    BuildMiddle(page)
+    BuildList(page)
     BuildRight(page)
-    ns:SetPageTestHandler('plans', function()
-        RefreshTest()
-        UpdatePlayhead()
-    end)
+    ns:SetPageTestHandler('plans', RefreshTest)
 end, function()
     Refresh()
-end)
+end, { icon = 'rail-plans', bossBar = true })
+
+--The boss's ability that a cast of the recorded pull is of, the same one as in the ability list when it is listed
+local function FindAbility(boss, name, spellId)
+    for _, ability in ipairs(ns:GetPlannerAbilities(boss, GetPlanText(), UI().difficulty == 15)) do
+        if (spellId and ability.spellId == spellId) or (ability.name and name and ability.name:lower() == name:lower()) then
+            return ability
+        end
+    end
+    return { spellId = spellId, name = name }
+end
+
+--Selects an ability in the ability list, for every stage or on its stage's tab
+local function SelectAbility(ability, scope)
+    local ui = UI()
+    ui.ability, ui.abilityScope, ui.stageTab, ui.plannerTab = AbilityKey(ability), scope, scope, 'assignments'
+end
+
+--What the Timeline page shares with this page
+ns.plannerKit = {
+    Selected = Selected, GetPlanText = GetPlanText, SpellNameAndIcon = SpellNameAndIcon, AbilityKey = AbilityKey,
+    StageName = StageName, ShortStageName = ShortStageName, HasStages = HasStages, IsIntermission = IsIntermission,
+    NewCardList = NewCardList, FillCards = FillCards, ResetCards = ResetCards, OpenEntryMenu = OpenEntryMenu,
+    ConflictTooltip = ConflictTooltip, CastsText = CastsText, TimingText = TimingText, FindAbility = FindAbility,
+    SelectAbility = SelectAbility, CARD_H = CARD_H, QUESTION_MARK = QUESTION_MARK
+}
 
 --For tests
 function ns:GetPlannerWidgets()

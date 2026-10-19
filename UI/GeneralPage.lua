@@ -24,7 +24,7 @@ local function Option(key, after)
 end
 
 local COMMANDS = "|cffffd100/cres|r  opens this window\n" ..
-    "|cffffd100/cres ramps|r, |cffffd100/cres display|r, |cffffd100/cres general|r  open a page\n" ..
+    "|cffffd100/cres timeline|r, |cffffd100/cres ramps|r, |cffffd100/cres display|r, |cffffd100/cres general|r  open a page\n" ..
     "|cffffd100/cres unlock|r  moves the reminders and the Next up strip\n" ..
     "|cffffd100/cres review|r  shows the review of the last pull\n" ..
     "|cffffd100/cres phase 2|r  starts stage 2 by hand, without a boss mod\n" ..
@@ -109,9 +109,9 @@ local function Build(frame)
     end
 end
 
-ns:RegisterPage('general', "General", 4, Build, function()
+ns:RegisterPage('general', "General", 5, Build, function()
     page.Refresh()
-end)
+end, { icon = 'rail-general' })
 
 --For tests
 function ns:GetGeneralPageWidgets()
