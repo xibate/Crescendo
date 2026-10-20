@@ -146,13 +146,17 @@ end
 local function BuildToolbar(frame)
     page.info = ns:Text(frame, 11, theme.dim)
     page.info:SetPoint("TOPLEFT", 0, -8)
-    page.info:SetPoint("RIGHT", frame, "RIGHT", -330, 0)
+    page.info:SetPoint("RIGHT", frame, "RIGHT", -440, 0)
     page.onlyAssigned = ns:Checkbox(frame, "Only assigned abilities", function() return UI().timelineAssigned end, function(value)
         UI().timelineAssigned = value or nil
         Refresh()
     end)
     page.onlyAssigned:SetWidth(170)
     page.onlyAssigned:SetPoint("TOPRIGHT", -140, -4)
+    page.autoButton = ns:Button(frame, "Auto-plan...", 100, 26, function() page.OpenAutoPlan() end)
+    page.autoButton:SetPoint("TOPRIGHT", -322, 0)
+    ns:Tooltip(page.autoButton, "Auto-plan", "Pick the abilities to cover and the cooldowns to use: Crescendo spreads them over " ..
+        "the casts of this pull, each only when it is ready.")
     page.replay = ns:Button(frame, "Replay pull", 128, 26, function()
         if ns:IsTesting() then
             ns:StopTest()
@@ -927,6 +931,241 @@ local function StopDrag()
     UpdateReplayButtons()
 end
 
+------------------------------------------------------------------------------------------------------------------------
+-- Auto-plan
+------------------------------------------------------------------------------------------------------------------------
+
+--What auto-plan can use for a spec, best first: ramps, then cooldowns, then on-use trinkets
+local function AutoPlanEntries(specKey)
+    local entries = {}
+    for _, name in ipairs(ns:GetRampNames(specKey)) do
+        table.insert(entries, name)
+    end
+    for _, spellId in ipairs(ns.specCooldowns[specKey] or {}) do
+        local info = C_Spell.GetSpellInfo(spellId)
+        if info and info.name then
+            table.insert(entries, info.name)
+        end
+    end
+    for _, trinket in ipairs(ns:GetEquippedTrinkets()) do
+        if trinket.spellId and trinket.name then
+            table.insert(entries, trinket.name)
+        end
+    end
+    return entries
+end
+
+--A ticked or not row of the auto-plan lists, for the key it is given
+local function CheckRow(list, isTicked, setTicked)
+    local row
+    row = ns:Checkbox(list.content, "", function() return row and row.key and isTicked(row.key) end, function(value) setTicked(row.key, value) end)
+    row:SetWidth(250)
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(16, 16)
+    row.icon:SetPoint("LEFT", 24, 0)
+    row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    row.label:ClearAllPoints()
+    row.label:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+    row.label:SetPoint("RIGHT", -40, 0)
+    row.extra = ns:Text(row, 11, theme.dim, "RIGHT")
+    row.extra:SetPoint("RIGHT", -4, 0)
+    return row
+end
+
+local function BuildAutoPlan()
+    local dialog = CreateFrame("Frame", nil, page.frame)
+    dialog:SetSize(620, 450)
+    dialog:SetPoint("CENTER", 0, 10)
+    dialog:SetFrameLevel((page.frame:GetFrameLevel() or 1) + 40)
+    dialog:EnableMouse(true)
+    ns:Fill(dialog, theme.window)
+    ns:Border(dialog, theme.borderStrong)
+    dialog:Hide()
+    page.autoDialog = dialog
+    page.auto = { abilities = {}, entries = {}, before = 2, skip = true }
+    local title = ns:Text(dialog, 15)
+    title:SetPoint("TOPLEFT", 16, -14)
+    title:SetText("Auto-plan")
+    local intro = ns:Text(dialog, 11, theme.dim)
+    intro:SetPoint("TOPLEFT", 16, -36)
+    intro:SetPoint("RIGHT", dialog, "RIGHT", -16, 0)
+    intro:SetWordWrap(true)
+    intro:SetText("Spreads your ramps and cooldowns over the casts of this pull, each only when it is ready. The ones higher " ..
+        "in the list go first. You can change every assignment after.")
+    local function List(x, label)
+        ns:SectionLabel(dialog, label):SetPoint("TOPLEFT", x, -70)
+        local well = CreateFrame("Frame", nil, dialog)
+        well:SetPoint("TOPLEFT", x, -86)
+        well:SetSize(282, 220)
+        ns:Fill(well, theme.well)
+        ns:Border(well, theme.border)
+        local list = ns:ScrollList(well)
+        list:SetPoint("TOPLEFT", 6, -4)
+        list:SetPoint("BOTTOMRIGHT", -4, 4)
+        return list
+    end
+    page.autoAbilityList = List(16, "Cover these abilities")
+    page.autoEntryList = List(322, "With these, best first")
+    page.autoAbilityRows, page.autoEntryRows = {}, {}
+
+    local landText = ns:Text(dialog, 12)
+    landText:SetPoint("TOPLEFT", 16, -326)
+    landText:SetText("Land")
+    page.autoBefore = ns:EditBox(dialog, 44, 24, function(text)
+        page.auto.before = math.max(-10, math.min(30, tonumber(text) or 0))
+        page.RefreshAutoPlan()
+    end)
+    page.autoBefore:SetPoint("LEFT", landText, "RIGHT", 8, 0)
+    page.autoBefore:SetJustifyH("CENTER")
+    local secondsText = ns:Text(dialog, 12)
+    secondsText:SetPoint("LEFT", page.autoBefore, "RIGHT", 8, 0)
+    secondsText:SetText("sec before each cast")
+    page.autoSkip = ns:Checkbox(dialog, "Leave casts that have something assigned", function() return page.auto.skip end, function(value)
+        page.auto.skip = value
+        page.RefreshAutoPlan()
+    end)
+    page.autoSkip:SetWidth(300)
+    page.autoSkip:SetPoint("TOPLEFT", 322, -328)
+    page.autoSummary = ns:Text(dialog, 12)
+    page.autoSummary:SetPoint("TOPLEFT", 16, -362)
+    page.autoSummary:SetPoint("RIGHT", dialog, "RIGHT", -16, 0)
+    page.autoUncovered = ns:Text(dialog, 11, theme.dim)
+    page.autoUncovered:SetPoint("TOPLEFT", 16, -382)
+    page.autoUncovered:SetPoint("RIGHT", dialog, "RIGHT", -16, 0)
+    page.autoUncovered:SetWordWrap(true)
+    page.autoUncovered:SetJustifyV("TOP")
+    page.autoUncovered:SetHeight(28)
+    page.autoAssign = ns:Button(dialog, "Assign", 160, 28, function() page.AssignAutoPlan() end, true)
+    page.autoAssign:SetPoint("BOTTOMRIGHT", -16, 14)
+    local cancel = ns:Button(dialog, "Cancel", 90, 28, function() dialog:Hide() end)
+    cancel:SetPoint("RIGHT", page.autoAssign, "LEFT", -8, 0)
+end
+
+--Works out what auto-plan would assign with what is ticked, and says so
+local function AutoPlanPicks()
+    local specKey = kit.Selected()
+    local casts = {}
+    for _, lane in ipairs(page.allLanes or {}) do
+        if page.auto.abilities[lane.key] then
+            for _, cast in ipairs(lane.casts) do
+                table.insert(casts, cast)
+            end
+        end
+    end
+    local entries = {}
+    for _, entry in ipairs(page.autoEntries or {}) do
+        if page.auto.entries[entry] then
+            table.insert(entries, entry)
+        end
+    end
+    local picks, uncovered = ns:AutoPlan(specKey, page.timeline, casts, entries, page.auto.before, page.auto.skip)
+    return picks, uncovered, #entries
+end
+
+local function RefreshAutoPlan()
+    local specKey = kit.Selected()
+    for _, row in ipairs(page.autoAbilityRows) do
+        row:Hide()
+    end
+    for index, lane in ipairs(page.allLanes or {}) do
+        local row = page.autoAbilityRows[index]
+        if not row then
+            row = CheckRow(page.autoAbilityList, function(key) return page.auto.abilities[key] end, function(key, value)
+                page.auto.abilities[key] = value or nil
+                page.RefreshAutoPlan()
+            end)
+            page.autoAbilityRows[index] = row
+        end
+        row.key = lane.key
+        local name, icon = kit.SpellNameAndIcon(lane.ability.spellId, lane.ability.name)
+        row.label:SetText(name)
+        row.icon:SetTexture(icon)
+        row.extra:SetText(#lane.casts .. (#lane.casts == 1 and " cast" or " casts"))
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -(index - 1) * 24)
+        row:Refresh()
+        row:Show()
+    end
+    page.autoAbilityList:SetContentHeight(#(page.allLanes or {}) * 24)
+    page.autoEntries = AutoPlanEntries(specKey)
+    for _, row in ipairs(page.autoEntryRows) do
+        row:Hide()
+    end
+    for index, entry in ipairs(page.autoEntries) do
+        local row = page.autoEntryRows[index]
+        if not row then
+            row = CheckRow(page.autoEntryList, function(key) return page.auto.entries[key] end, function(key, value)
+                page.auto.entries[key] = value or nil
+                page.RefreshAutoPlan()
+            end)
+            page.autoEntryRows[index] = row
+        end
+        row.key = entry
+        row.label:SetText(entry)
+        row.icon:SetTexture(kit.EntryIcon(entry))
+        local cooldown = ns:EntryCooldown(specKey, entry)
+        row.extra:SetText(cooldown and ns:FormatTime(cooldown.duration) or "")
+        row:ClearAllPoints()
+        row:SetPoint("TOPLEFT", 0, -(index - 1) * 24)
+        row:Refresh()
+        row:Show()
+    end
+    page.autoEntryList:SetContentHeight(#page.autoEntries * 24)
+    page.autoBefore:SetValue(tostring(page.auto.before))
+    page.autoSkip:Refresh()
+
+    local picks, uncovered, entryCount = AutoPlanPicks()
+    page.autoPicks = picks
+    local total = #picks + #uncovered
+    if total == 0 then
+        page.autoSummary:SetText(entryCount == 0 and "Tick what to use on the right." or "Tick the abilities to cover on the left.")
+        page.autoSummary:SetTextColor(1, 1, 1, 0.53)
+    else
+        page.autoSummary:SetText("Covers " .. #picks .. " of " .. total .. (total == 1 and " cast" or " casts"))
+        page.autoSummary:SetTextColor(ns:GetAccent())
+    end
+    local missing = {}
+    for index, cast in ipairs(uncovered) do
+        if index > 6 then
+            table.insert(missing, "and " .. (#uncovered - 6) .. " more")
+            break
+        end
+        table.insert(missing, cast.name .. " " .. cast.count .. " (" .. ns:FormatTime(cast.at) .. ")")
+    end
+    page.autoUncovered:SetText(#missing > 0 and ("Nothing ready for: " .. table.concat(missing, ", ")) or "")
+    page.autoAssign.label:SetText(#picks > 0 and ("Assign to " .. #picks .. (#picks == 1 and " cast" or " casts")) or "Assign")
+    page.autoAssign:SetEnabled(#picks > 0)
+    page.autoAssign:SetAlpha(#picks > 0 and 1 or 0.4)
+end
+
+local function OpenAutoPlan()
+    if not page.timeline then
+        return
+    end
+    if not page.autoDialog then
+        BuildAutoPlan()
+        --Everything to use starts ticked
+        for _, entry in ipairs(AutoPlanEntries(kit.Selected())) do
+            page.auto.entries[entry] = true
+        end
+    end
+    page.autoDialog:Show()
+    page.RefreshAutoPlan()
+end
+
+local function AssignAutoPlan()
+    local specKey, diffSlug, boss = kit.Selected()
+    local picks = page.autoPicks or {}
+    local count = ns:ApplyAutoPlan(specKey, diffSlug, boss, picks, page.auto.before, kit.HasStages(boss))
+    page.autoDialog:Hide()
+    kit.ResetCards(page.cardList)
+    Refresh()
+    if count > 0 then
+        ns:WriteOutput("Auto-plan assigned " .. count .. (count == 1 and " cast" or " casts") .. " of " .. ns.bosses[boss].name ..
+            ". The plan before is in History on the Plans page.")
+    end
+end
+
 function Refresh(keepRows)
     if not page then
         return
@@ -980,6 +1219,7 @@ function Refresh(keepRows)
         (timeline.conflicts > 0 and ("  ·  |cffff5a4d" .. timeline.conflicts .. " not ready in time|r") or ""))
     page.onlyAssigned:Refresh()
     local lanes = Lanes(timeline, boss, planText)
+    page.allLanes = lanes
     local selected = FindSelected(lanes)
     page.selected = selected
     DrawStages(Stages(timeline), boss)
@@ -1015,7 +1255,8 @@ end
 
 ns:RegisterPage('timeline', "Timeline", 2, function(frame)
     kit = ns.plannerKit
-    page = { frame = frame, Assign = Assign, StartDrag = StartDrag, StopDrag = StopDrag }
+    page = { frame = frame, Assign = Assign, StartDrag = StartDrag, StopDrag = StopDrag, OpenAutoPlan = OpenAutoPlan,
+        RefreshAutoPlan = RefreshAutoPlan, AssignAutoPlan = AssignAutoPlan }
     BuildToolbar(frame)
     BuildChart(frame)
     BuildPanel(frame)
