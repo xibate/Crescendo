@@ -223,6 +223,7 @@ function ns:StartTest(specKey, diffSlug, encounterId, cast, startAt)
     ns.fight.test.duration = duration
     After(duration - (cast and 0 or startAt), function() ns:StopTest() end)
     ns:OnTestChanged()
+    ns.db.setup.tested = true
     return true
 end
 

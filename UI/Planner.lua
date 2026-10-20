@@ -1308,7 +1308,7 @@ local function BuildNoteTab(panel)
         end
     end)
     area:SetPoint("TOPLEFT", 0, -66)
-    area:SetPoint("BOTTOMRIGHT", 0, 100)
+    area:SetPoint("BOTTOMRIGHT", 0, 140)
     planner.noteBox = area.box
 
     --Crescendo strings
@@ -1325,7 +1325,43 @@ local function BuildNoteTab(panel)
         function(value) UI().sharePulls = value or nil end,
         "Adds your recorded pulls of these bosses, so someone who hasn't pulled them yet sees them on the Timeline and can " ..
         "replay them. A pull makes the string a lot longer.")
-    planner.sharePulls:SetPoint("BOTTOMLEFT", planner.shareButtons, "TOPLEFT", 0, 8)
+    --Sending in game, to the group or one player, who are asked whether to import
+    local sendRow = CreateFrame("Frame", nil, planner.shareButtons)
+    sendRow:SetPoint("BOTTOMLEFT", planner.shareButtons, "TOPLEFT", 0, 8)
+    sendRow:SetPoint("BOTTOMRIGHT", planner.shareButtons, "TOPRIGHT", 0, 8)
+    sendRow:SetHeight(26)
+    local function Send(target)
+        local specKey = Selected()
+        local text = ns:ExportPlans(specKey, PlansToExport(), UI().sharePulls)
+        if not text then
+            ShareStatus("There is no plan to send yet", 'error')
+            return
+        end
+        --A short string is sent at once, so the status is set before sending
+        planner.sendingTo = target or "your group"
+        ShareStatus("Sending to " .. planner.sendingTo .. "...")
+        local parts, problem = ns:SendPlans(text, target)
+        if not parts then
+            ShareStatus(problem, 'error')
+        end
+    end
+    planner.sendGroup = ns:Button(sendRow, "Send to group", 130, 26, function() Send(nil) end, true)
+    planner.sendGroup:SetPoint("LEFT", 0, 0)
+    ns:Tooltip(planner.sendGroup, "Send to group", "Sends these plans to everyone in your raid or party who has Crescendo. Each of " ..
+        "them is asked whether to import them. Can't be done during a boss fight.")
+    planner.sendName = ns:EditBox(sendRow, 150, 26)
+    planner.sendName:SetPoint("LEFT", planner.sendGroup, "RIGHT", 8, 0)
+    planner.sendName:SetPlaceholder("Player name")
+    planner.sendPlayer = ns:Button(sendRow, "Send to player", 120, 26, function()
+        local name = (planner.sendName:GetText() or ''):match('^%s*(.-)%s*$')
+        if name == '' then
+            ShareStatus("Type the name of the player to send to", 'error')
+            return
+        end
+        Send(name)
+    end)
+    planner.sendPlayer:SetPoint("LEFT", planner.sendName, "RIGHT", 8, 0)
+    planner.sharePulls:SetPoint("BOTTOMLEFT", sendRow, "TOPLEFT", 0, 8)
     planner.shareExport = ns:Button(planner.shareButtons, "Export", 80, 26, function()
         local specKey = Selected()
         local text, count, pulls = ns:ExportPlans(specKey, PlansToExport(), UI().sharePulls)
@@ -1385,6 +1421,20 @@ local function BuildNoteTab(panel)
     planner.noteStatus:SetHeight(34)
     planner.noteStatus:SetWordWrap(true)
     planner.noteStatus:SetJustifyV("TOP")
+end
+
+--How sending plans goes, in the Share tab's status line
+function ns:OnSendProgress(index, count, problem)
+    if not planner or not planner.noteStatus then
+        return
+    end
+    if problem then
+        ShareStatus(problem, 'error')
+    elseif index == count then
+        ShareStatus("Sent to " .. (planner.sendingTo or "your group") .. ". Everyone with Crescendo is asked whether to import it.", 'accent')
+    else
+        ShareStatus("Sending to " .. (planner.sendingTo or "your group") .. ": " .. index .. " of " .. count .. "...")
+    end
 end
 
 local function RefreshShare()
@@ -1567,6 +1617,76 @@ local function BuildPreviews(page)
     note:SetPoint("RIGHT", column, "RIGHT", 0, 0)
     note:SetWordWrap(true)
     note:SetText("Style, size and how many Next up shows are set on the Display and General pages.")
+
+    --Getting started: what is left to set up, over the reminder previews until it is done or hidden
+    local checklist = CreateFrame("Frame", nil, column)
+    checklist:SetPoint("TOPLEFT", 0, 0)
+    checklist:SetPoint("RIGHT", column, "RIGHT", 0, 0)
+    checklist:SetHeight(168)
+    checklist:SetFrameLevel((column:GetFrameLevel() or 1) + 10)
+    ns:Fill(checklist, theme.window)
+    planner.checklist = checklist
+    ns:SectionLabel(checklist, "Getting started"):SetPoint("TOPLEFT", 0, 0)
+    planner.checklistHide = ns:Button(checklist, "Hide", 50, 18, function()
+        ns.db.setup.checklistHidden = true
+        Refresh(true)
+    end)
+    planner.checklistHide:SetPoint("TOPRIGHT", 0, 3)
+    ns:Tooltip(planner.checklistHide, "Hide the checklist", "Show it again from the General page.")
+    planner.checklistRows = {}
+    for index = 1, 5 do
+        local row = CreateFrame("Button", nil, checklist)
+        row:SetHeight(26)
+        row:SetPoint("TOPLEFT", 0, -20 - (index - 1) * 28)
+        row:SetPoint("RIGHT", checklist, "RIGHT", 0, 0)
+        row.background = ns:Fill(row, { 1, 1, 1, 0.03 })
+        row.mark = row:CreateTexture(nil, "ARTWORK")
+        row.mark:SetSize(14, 14)
+        row.mark:SetPoint("LEFT", 8, 0)
+        row.label = ns:Text(row, 12)
+        row.label:SetPoint("LEFT", row.mark, "RIGHT", 8, 0)
+        row.label:SetPoint("RIGHT", -8, 0)
+        row:SetScript("OnClick", function(self)
+            if self.item and not self.item.done and self.item.action then
+                self.item.action()
+                Refresh(true)
+            end
+        end)
+        row:SetScript("OnEnter", function(self) if self.item and not self.item.done then self.background:SetColorTexture(1, 1, 1, 0.07) end end)
+        row:SetScript("OnLeave", function(self) self.background:SetColorTexture(1, 1, 1, 0.03) end)
+        ns:Tooltip(row, function(tooltip, self)
+            if not self.item then
+                return false
+            end
+            tooltip:SetText(self.item.text, 1, 1, 1)
+            tooltip:AddLine(self.item.help, 0.7, 0.7, 0.7, true)
+            if not self.item.done and self.item.action then
+                tooltip:AddLine("Click to do it now", ns:GetAccent())
+            end
+        end)
+        planner.checklistRows[index] = row
+    end
+end
+
+local function RefreshChecklist()
+    local active = ns:ChecklistActive()
+    planner.checklist:SetShown(active)
+    if not active then
+        return
+    end
+    for index, item in ipairs(ns:SetupChecklist()) do
+        local row = planner.checklistRows[index]
+        row.item = item
+        row.label:SetText(item.text)
+        row.mark:SetTexture(item.done and "Interface\\RaidFrame\\ReadyCheck-Ready" or "Interface\\RaidFrame\\ReadyCheck-Waiting")
+        row.label:SetTextColor(1, 1, 1, item.done and 0.45 or 0.95)
+    end
+end
+
+function ns:OnChecklistChanged()
+    if planner and planner.page:IsShown() then
+        Refresh(true)
+    end
 end
 
 --The first presses of the pull: when each use lands on the recorded pull, else the plan's times
@@ -1761,6 +1881,7 @@ function Refresh(keepRows)
     RefreshAssignments(selected, keepRows)
     if showPreviews then
         RefreshPreviews(planText)
+        RefreshChecklist()
     end
     if tab == 'plan' then
         planner.planUndo:SetShown(planner.copyUndo ~= nil)

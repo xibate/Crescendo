@@ -27,6 +27,7 @@ local COMMANDS = "|cffffd100/cres|r  opens this window\n" ..
     "|cffffd100/cres timeline|r, |cffffd100/cres ramps|r, |cffffd100/cres display|r, |cffffd100/cres general|r  open a page\n" ..
     "|cffffd100/cres unlock|r  moves the reminders and the Next up strip\n" ..
     "|cffffd100/cres review|r  shows the review of the last pull\n" ..
+    "|cffffd100/cres setup|r  opens the setup guide\n" ..
     "|cffffd100/cres phase 2|r  starts stage 2 by hand, without a boss mod\n" ..
     "|cffffd100/cres stop|r  stops a test"
 
@@ -218,9 +219,18 @@ local function Build(frame)
         "How big the window is drawn, on top of the game's UI scale."))
     page.windowScale:SetPoint("TOPLEFT", 0, -276)
 
-    ns:SectionLabel(right, "Commands"):SetPoint("TOPLEFT", 0, -336)
+    page.setupGuide = ns:Button(right, "Open the setup guide", 180, 26, function() ns:OpenSetup(1) end)
+    page.setupGuide:SetPoint("TOPLEFT", 0, -330)
+    page.showChecklist = ns:Button(right, "Show the checklist", 160, 26, function()
+        ns.db.setup.checklistHidden = nil
+        ns:OpenWindow('plans')
+    end)
+    page.showChecklist:SetPoint("LEFT", page.setupGuide, "RIGHT", 8, 0)
+    ns:Tooltip(page.showChecklist, "Getting started", "The checklist on the Plans page with what is left to set up.")
+
+    ns:SectionLabel(right, "Commands"):SetPoint("TOPLEFT", 0, -372)
     local commands = ns:Text(right, 11, theme.dim)
-    commands:SetPoint("TOPLEFT", 0, -354)
+    commands:SetPoint("TOPLEFT", 0, -390)
     commands:SetPoint("RIGHT", right, "RIGHT", 0, 0)
     commands:SetWordWrap(true)
     commands:SetJustifyV("TOP")

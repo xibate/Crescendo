@@ -8,6 +8,10 @@ Put this folder in `World of Warcraft/_retail_/Interface/AddOns/` and name it ex
 
 Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelper` folder, and to keep your plans and ramps rename `WTF/Account/<account>/SavedVariables/ZynxRampHelper.lua` to `Crescendo.lua` while the game is closed. Crescendo moves them over at the next login.
 
+## Getting started
+
+The first time the window opens, a short setup guide walks through four steps: your spec and whether BigWigs or DBM is installed, hearing the reminders (Test voice, and Soon or a countdown), where the reminders show (style, and Move the reminders, which comes back to the guide when you lock them), and where your plan comes from (from your raid, or your own). `/cres setup` or the General page opens it again. Until everything is done, a **Getting started** checklist on the Plans page shows what is left: a boss mod, testing the voice, placing the reminders, a first plan, and trying it once. Click a row to do it, or Hide it.
+
 ## The window
 
 `/cres` (or `/crescendo`, or the addon button on the minimap) opens the window, styled after EllesmereUI and using its font when it is installed. Its accent colour is EllesmereUI's, Crescendo's aqua or one you pick (General page, Look). The side bar on the left has the five pages (Plans, Timeline, Ramps, Display and General) and every raid with its bosses; the number next to a boss is how many lines its plan has for your spec and the difficulty. Click a raid's name to fold it away (the season 1 raids start folded). **<<** folds the side bar down to the page icons and a boss button, which opens the raids and bosses as a menu; **>>** opens it again. Drag the bottom right corner to resize the window; the size is saved, and right-clicking the corner goes back to the normal size. In a narrow window the previews on Plans and Next up on Timeline make room for the assignments. The header shows the selected boss with Heroic or Mythic and your spec, which Plans and Timeline share. `/cres timeline`, `/cres ramps`, `/cres display` and `/cres general` open a page directly, `/cres review` shows the last pull's review, `/cres stop` stops a test. In a raid, the window opens on the boss you target, or else the next boss that isn't dead this lockout, on that difficulty and for your spec.
@@ -33,7 +37,7 @@ Assignments are saved as ability lines in the boss's plan (`@Spectral Coils p2.5
 
 ### Sharing
 
-**Share**, next to Plan text, has two modes. **Crescendo string** exports the selected plan, or every plan of the raid on Heroic and Mythic, as text to paste to another Crescendo user, with the ramps the plans use. Pasting a string shows what importing it does; **Import** (click twice) replaces the plans for those bosses and adds the ramps you don't have, keeping your own ramps with the same name. **MRT note** takes your times from an MRT note, or copies the plan out as note lines.
+**Share**, next to Plan text, sends plans in game: **Send to group** sends the plans (this plan or the whole raid, with recorded pulls when ticked) to everyone in your raid or party with Crescendo, **Send to player** to one player by name. Whoever receives them is asked whether to import them, and their old plans stay in History. It also has two modes for text strings. **Crescendo string** exports the selected plan, or every plan of the raid on Heroic and Mythic, as text to paste to another Crescendo user, with the ramps the plans use. Pasting a string shows what importing it does; **Import** (click twice) replaces the plans for those bosses and adds the ramps you don't have, keeping your own ramps with the same name. **MRT note** takes your times from an MRT note, or copies the plan out as note lines.
 
 ### General
 

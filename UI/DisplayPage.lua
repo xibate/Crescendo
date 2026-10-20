@@ -122,6 +122,7 @@ local function Build(frame)
     page.tts:SetPoint("TOPLEFT", 0, -20)
     page.play = ns:Button(right, "Play voice", 110, 24, function()
         ns:SendTts('Crescendo')
+        ns.db.setup.voiceTested = true
     end)
     page.play:SetPoint("TOPRIGHT", 0, -18)
     ns:Tooltip(page.play, "Play voice", "Speaks a test message, when speaking is on.")

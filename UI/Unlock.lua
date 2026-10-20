@@ -336,6 +336,7 @@ function ns:SetUnlocked(on)
         if windowWasOpen then
             ns:OpenWindow('display')
         end
+        ns:OnRemindersPlaced()
     end
 end
 

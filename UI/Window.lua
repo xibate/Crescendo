@@ -563,6 +563,7 @@ function ns:OpenWindow(key)
     frame:Show()
     ns:ShowPage(key or UI().page)
     ns:RefreshTestStatus()
+    ns:OpenSetupFirstTime()
 end
 
 --In a raid, the planner opens on the boss the player is about to pull, on that difficulty and for their own spec
@@ -634,7 +635,8 @@ function Crescendo_OnAddonCompartmentClick()
 end
 
 --/cres opens the window, /cres timeline, /cres ramps or /cres display a page, /cres unlock moves the reminders, /cres review shows the
---last pull's review, /cres phase 2 starts stage 2 without a boss mod and /cres stop stops a test
+--last pull's review, /cres setup opens the setup guide, /cres phase 2 starts stage 2 without a boss mod and /cres stop
+--stops a test
 function ns:SetUpCommands()
     AddSettingsEntry()
     SLASH_CRESCENDO1 = "/cres"
@@ -648,6 +650,8 @@ function ns:SetUpCommands()
             ns:StopTest()
         elseif command == 'review' then
             ns:OpenPullReview()
+        elseif command == 'setup' then
+            ns:OpenSetup(1)
         elseif command == 'unlock' or command == 'lock' then
             ns:SetUnlocked(command == 'unlock' and not ns:IsUnlocked())
         elseif PageInfo(command) then

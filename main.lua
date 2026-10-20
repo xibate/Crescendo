@@ -59,5 +59,6 @@ loader:SetScript("OnEvent", function(_, event, addonName)
     elseif addonName == "Crescendo" then
         ns:InitDatabase()
         ns:SetUpCommands()
+        ns:SetUpComms()
     end
 end)

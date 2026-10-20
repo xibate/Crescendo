@@ -14,6 +14,8 @@ local DATABASE_VERSION = 3
 -- seenAbilities  seenAbilities[encounter id][ability name] = spell id, the abilities boss mods showed bars for
 -- cooldowns      cooldowns[spell id] = cooldown in seconds, seen when it could be read, see Core/Cooldowns.lua
 -- recordings     recordings[encounter id][difficulty slug] = the longest recorded pull, see Core/Test.lua
+-- setup          what the setup guide and its checklist know is done: done, dismissed, voiceTested, placed, tested,
+--                checklistHidden
 -- ui             what is selected in the window
 local defaults = {
     options = {
@@ -60,6 +62,7 @@ local defaults = {
     seenAbilities = {},
     cooldowns = {},
     recordings = {},
+    setup = {},
     ui = {}
 }
 
