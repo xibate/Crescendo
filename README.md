@@ -6,6 +6,7 @@
 
 **Never miss a ramp. Your healing plan, shown and spoken at the right moment.**
 
+[![CurseForge downloads](https://img.shields.io/curseforge/dt/1760904?logo=curseforge&label=CurseForge&color=F16436)](https://www.curseforge.com/projects/1760904)
 [![Latest release](https://img.shields.io/github/v/release/xibate/Ramp-helper?include_prereleases&label=release)](https://github.com/xibate/Ramp-helper/releases)
 
 </div>

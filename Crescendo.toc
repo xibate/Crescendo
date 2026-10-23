@@ -9,6 +9,7 @@
 ## OptionalDeps: BigWigs, DBM-Core, EllesmereUI
 ## AddonCompartmentFunc: Crescendo_OnAddonCompartmentClick
 ## X-Category: Combat, Raid
+## X-Curse-Project-ID: 1760904
 
 Config\Bosses.lua
 Config\Specs.lua
