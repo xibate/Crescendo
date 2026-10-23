@@ -1,9 +1,8 @@
-# Uploads Crescendo to CurseForge when a version tag is pushed, like v3.10.0.
-# A tag with "beta" or "alpha" in it (v3.11.0-beta1) is uploaded as a beta or alpha file.
-# Needs, under Settings > Secrets and variables > Actions:
-#   secret   CF_API_KEY              a CurseForge API token
-#   variable CURSEFORGE_PROJECT_ID   the project id from the CurseForge project page
-name: Release to CurseForge
+name: Publish Addon to CurseForge
+
+# Runs when a version tag is pushed, like v3.10.0. A tag with "beta" or "alpha" in it, like v3.10.0-beta1,
+# goes up as a beta or alpha file. Needs the secret CF_API_KEY (a CurseForge API token) and the project id
+# in ## X-Curse-Project-ID in Crescendo.toc.
 
 on:
   push:
@@ -11,31 +10,27 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: write # lets the packager create a GitHub release
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
-    env:
-      CF_API_KEY: ${{ secrets.CF_API_KEY }}
-      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # full history so the packager can build a changelog
 
-      - name: Check the setup and the version
-        env:
-          PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+      - name: Check the tag matches the version
         run: |
-          if [ -z "$CF_API_KEY" ]; then echo "::error::The CF_API_KEY secret is missing"; exit 1; fi
-          if [ -z "$PROJECT_ID" ]; then echo "::error::The CURSEFORGE_PROJECT_ID variable is missing"; exit 1; fi
           tag="${GITHUB_REF_NAME#v}"
           version="$(sed -n 's/^## Version: *//p' Crescendo.toc | tr -d '\r')"
           if [ "${tag%%-*}" != "$version" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match ## Version: $version in Crescendo.toc"; exit 1
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match ## Version: $version in Crescendo.toc"
+            exit 1
           fi
 
-      - uses: BigWigsMods/packager@v2
-        with:
-          args: -p ${{ vars.CURSEFORGE_PROJECT_ID }}
+      - name: Package and upload
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_KEY }}
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}

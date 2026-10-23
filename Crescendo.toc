@@ -8,6 +8,7 @@
 ## SavedVariablesPerCharacter: CrescendoCharacterDB
 ## OptionalDeps: BigWigs, DBM-Core, EllesmereUI
 ## AddonCompartmentFunc: Crescendo_OnAddonCompartmentClick
+## X-Category: Combat, Raid
 
 Config\Bosses.lua
 Config\Specs.lua
