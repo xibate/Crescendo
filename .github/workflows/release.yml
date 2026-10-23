@@ -1,16 +1,27 @@
 name: Publish Addon to CurseForge
 
-# Runs when a version tag is pushed, like v3.10.0. A tag with "beta" or "alpha" in it, like v3.10.0-beta1,
-# goes up as a beta or alpha file. Needs the secret CF_API_KEY (a CurseForge API token) and the project id
-# in ## X-Curse-Project-ID in Crescendo.toc.
+# Runs when a version tag is pushed, like v3.10.0, or from the Actions tab with "Run workflow", which tags the
+# version in Crescendo.toc itself (betas get -beta1, -beta2 and so on). A tag with "beta" or "alpha" in it goes
+# up as a beta or alpha file. Needs the secret CF_API_KEY (a CurseForge API token) and the project id in
+# ## X-Curse-Project-ID in Crescendo.toc.
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      type:
+        description: "Release type"
+        type: choice
+        options:
+          - beta
+          - release
+          - alpha
+        default: beta
 
 permissions:
-  contents: write # lets the packager create a GitHub release
+  contents: write # lets the workflow tag and the packager create a GitHub release
 
 jobs:
   publish:
@@ -20,7 +31,31 @@ jobs:
         with:
           fetch-depth: 0 # full history so the packager can build a changelog
 
+      - name: Tag the version in the toc
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          TYPE: ${{ inputs.type }}
+        run: |
+          version="$(sed -n 's/^## Version: *//p' Crescendo.toc | tr -d '\r')"
+          if [ "$TYPE" = "release" ]; then
+            tag="v$version"
+            if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "::error::$tag is already released, raise ## Version in Crescendo.toc first"
+              exit 1
+            fi
+          else
+            n=1
+            while git rev-parse -q --verify "refs/tags/v$version-$TYPE$n" >/dev/null; do n=$((n + 1)); done
+            tag="v$version-$TYPE$n"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$tag"
+          git push origin "$tag"
+          echo "Tagged $tag"
+
       - name: Check the tag matches the version
+        if: github.event_name == 'push'
         run: |
           tag="${GITHUB_REF_NAME#v}"
           version="$(sed -n 's/^## Version: *//p' Crescendo.toc | tr -d '\r')"
