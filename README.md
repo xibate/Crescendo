@@ -7,7 +7,7 @@
 **Never miss a ramp. Your healing plan, shown and spoken at the right moment.**
 
 [![CurseForge downloads](https://img.shields.io/curseforge/dt/1760904?logo=curseforge&label=CurseForge&color=F16436)](https://www.curseforge.com/projects/1760904)
-[![Latest release](https://img.shields.io/github/v/release/xibate/Ramp-helper?include_prereleases&label=release)](https://github.com/xibate/Ramp-helper/releases)
+[![Latest release](https://img.shields.io/github/v/release/xibate/Crescendo?include_prereleases&label=release)](https://github.com/xibate/Crescendo/releases)
 
 </div>
 
@@ -40,7 +40,7 @@ Bosses: The Venomous Abyss, The Unbinding of Kith'ix and Nymrissa Wavecaller, pl
 
 **Manually:**
 
-1. Download the latest `Crescendo-vX.Y.Z.zip` from [GitHub Releases](https://github.com/xibate/Ramp-helper/releases).
+1. Download the latest `Crescendo-vX.Y.Z.zip` from [GitHub Releases](https://github.com/xibate/Crescendo/releases).
 2. Extract it into `World of Warcraft\_retail_\Interface\AddOns\`.
 3. You should end up with `Interface\AddOns\Crescendo\Crescendo.toc`.
 4. Restart the game or type `/reload`.
@@ -55,4 +55,4 @@ Type `/cres` or click the addon button on the minimap. The first time, a short s
 
 Made by **Xibate** and **Zynx**.
 
-Found a bug or have an idea? [Open an issue](https://github.com/xibate/Ramp-helper/issues).
+Found a bug or have an idea? [Open an issue](https://github.com/xibate/Crescendo/issues).
