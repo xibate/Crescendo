@@ -1,0 +1,7 @@
+# Packaging for CurseForge (BigWigs packager, see .github/workflows/release.yml)
+package-as: Crescendo
+
+ignore:
+  - tools
+  - TODO.txt
+  - "*.zip"

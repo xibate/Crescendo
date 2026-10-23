@@ -1,0 +1,41 @@
+# Uploads Crescendo to CurseForge when a version tag is pushed, like v3.10.0.
+# A tag with "beta" or "alpha" in it (v3.11.0-beta1) is uploaded as a beta or alpha file.
+# Needs, under Settings > Secrets and variables > Actions:
+#   secret   CF_API_KEY              a CurseForge API token
+#   variable CURSEFORGE_PROJECT_ID   the project id from the CurseForge project page
+name: Release to CurseForge
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check the setup and the version
+        env:
+          PROJECT_ID: ${{ vars.CURSEFORGE_PROJECT_ID }}
+        run: |
+          if [ -z "$CF_API_KEY" ]; then echo "::error::The CF_API_KEY secret is missing"; exit 1; fi
+          if [ -z "$PROJECT_ID" ]; then echo "::error::The CURSEFORGE_PROJECT_ID variable is missing"; exit 1; fi
+          tag="${GITHUB_REF_NAME#v}"
+          version="$(sed -n 's/^## Version: *//p' Crescendo.toc | tr -d '\r')"
+          if [ "${tag%%-*}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match ## Version: $version in Crescendo.toc"; exit 1
+          fi
+
+      - uses: BigWigsMods/packager@v2
+        with:
+          args: -p ${{ vars.CURSEFORGE_PROJECT_ID }}

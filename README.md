@@ -125,6 +125,12 @@ Without an icon option, a step shows the icon of the spell in its text, or else 
 
 Addons can't read the combat log any more, and spell charges and haste can be secret during encounters. When charges can't be read, charges steps assume both charges are spent and show early. Haste and recharge times use the last values read outside the encounter.
 
+## Releasing
+
+Pushing a version tag uploads the addon to CurseForge through the [BigWigs packager](https://github.com/BigWigsMods/packager) (`.github/workflows/release.yml`, files left out in `.pkgmeta`). Bump `## Version` in `Crescendo.toc`, commit, then tag the same version: `git tag v3.10.0 && git push origin v3.10.0`. A tag with `beta` or `alpha` in it, like `v3.11.0-beta1`, uploads a beta or alpha file, which players only get when they ask for those. The run stops when the tag and `## Version` don't match. Each release is also kept as a GitHub release with the zip. A file that shouldn't have gone out can be deleted on CurseForge from the project's Files page.
+
+Setting it up once: create the project on CurseForge, then in this repository's Settings > Secrets and variables > Actions add the secret `CF_API_KEY` (a CurseForge API token) and the variable `CURSEFORGE_PROJECT_ID` (the project id shown on the project page).
+
 ## Code
 
 | Folder | Contents |
