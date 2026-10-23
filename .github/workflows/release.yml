@@ -31,6 +31,15 @@ jobs:
         with:
           fetch-depth: 0 # full history so the packager can build a changelog
 
+      - name: Check the CurseForge token is set
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_KEY }}
+        run: |
+          if [ -z "$CF_API_TOKEN" ]; then
+            echo "::error::The CF_API_KEY secret is missing: add a CurseForge API token under Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+
       - name: Tag the version in the toc
         if: github.event_name == 'workflow_dispatch'
         env:
