@@ -45,8 +45,6 @@ Bosses: The Venomous Abyss, The Unbinding of Kith'ix and Nymrissa Wavecaller, pl
 3. You should end up with `Interface\AddOns\Crescendo\Crescendo.toc`.
 4. Restart the game or type `/reload`.
 
-Coming from Zynx Ramp Helper, the addon's old name: delete the old `ZynxRampHelper` folder, and to keep your plans and ramps rename `WTF\Account\<account>\SavedVariables\ZynxRampHelper.lua` to `Crescendo.lua` while the game is closed.
-
 ## Getting started
 
 Type `/cres` or click the addon button on the minimap. The first time, a short setup guide walks you through your boss mod, the voice, where the reminders show and your first plan. Everything else is in the [guide](docs/Guide.md).
